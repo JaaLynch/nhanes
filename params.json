@@ -1,0 +1,6 @@
+{
+    "eta":0.001,
+    "max_depth": 7,
+    "objective": "survival:cox",
+    "subsample": 0.7
+}
