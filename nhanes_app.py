@@ -14,6 +14,29 @@ from sklearn.model_selection import train_test_split
 import xgboost, shap
 from lifelines.utils import concordance_index
 
+def create_filter_widgets(cols):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        filter_col = st.selectbox(
+            'First filter column',
+            tuple(cols)
+        )
+    with col2:
+        filt_low = st.slider(
+            filter_col+' min',
+            df[filter_col].min(),
+            df[filter_col].max(),
+            value = df[filter_col].min()
+        )
+    with col3:
+        filt_high = st.slider(
+            filter_col+' max',
+            df[filter_col].min(),
+            df[filter_col].max(),
+            value = df[filter_col].max()
+        )
+    return filter_col, filt_low, filt_high
+
 st.title('NHANES Modeling Dashboard')
 
 url = 'https://wwwn.cdc.gov/nchs/nhanes/continuousnhanes/default.aspx'
@@ -514,21 +537,22 @@ st.subheader('Model Understanding and Evaluation')
 
 if st.checkbox('Risk Score Distribution'):
     df = pd.read_pickle('model/df_model.p')
+    cols = [col.replace('_shap','') for col in df.columns if '_shap' in col]
 
     col1, col2 = st.columns(2)
     with col1:
-        pir_low = st.slider("Poverty to Income Ratio Min:", 0, 5, value=2, step=1)
+        pir_low = st.slider("Poverty to Income Ratio Min:", 0, 5, value=3, step=1)
+        eth_low = st.slider("Race/Ethnicity Min:", 0, 5, value=3, step=1)   
     with col2:
         pir_high = st.slider("Poverty to Income Ratio Max: ", 0, 5, value=5, step=1)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        eth_low = st.slider("Race/Ethnicity Min:", 0, 5, value=3, step=1)
-    with col2:
         eth_high = st.slider("Race/Ethnicity Max: ", 0, 5, value=4, step=1)
-
+        
     df = df[(df['pir']>=pir_low) & (df['pir']<=pir_high)]
     df = df[(df['race']>=eth_low) & (df['race']<=eth_high)]
+
+    if st.checkbox('Apply filter to population'):
+        filter_col, filt_low, filt_high = create_filter_widgets(cols)
+        df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
 
     fig = plt.figure(figsize=(10,6))
     sns.histplot(data=df, x="risk_score")
@@ -536,18 +560,35 @@ if st.checkbox('Risk Score Distribution'):
 
 if st.checkbox('Actual To Expected by Risk Score Group'):
     df = pd.read_pickle('model/df_model.p')
+    cols = [col.replace('_shap','') for col in df.columns if '_shap' in col]
+    
+    hue = st.selectbox(
+        'Select variable used to color bars',
+        tuple(['gender','age_band_5','age_band_10','cohort_5','cohort_10'])
+    )
+    
+    if st.checkbox('Apply filter to actual to expected chart'):
+        filter_col, filt_low, filt_high = create_filter_widgets(cols)
+        df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
 
-    ae = df.groupby(['gender','risk_group']).agg(
+    ae = df.groupby([hue,'risk_group']).agg(
         life_years = ('exposure_months','sum'),
         expected_deaths = ('expected_deaths','sum'), 
         actual_deaths = ('death','sum')
     )
-    ae['ae'] = ae['actual_deaths']/ae['expected_deaths']
+    ae['ae'] = ae['actual_deaths']/ae['expected_deaths']*100
     ae['life_years'] = ae['life_years']/12
     ae = ae.reset_index()
 
     fig = plt.figure(figsize=(10,6))
-    sns.barplot(data=ae, x='risk_group', y='ae', hue='gender')
+    sns.barplot(data=ae, x='risk_group', y='ae', hue=hue)
+    st.pyplot(fig)
+
+    ae['life_years_sum']=ae[hue].map(ae.groupby(hue)["life_years"].sum())
+    ae['Frequency'] = ae['life_years']/ae['life_years_sum']
+ 
+    fig = plt.figure(figsize=(10,3))
+    sns.barplot(data=ae, x='risk_group', y='Frequency', hue=hue)
     st.pyplot(fig)
 
 if st.checkbox('SHAP Importance'):
@@ -604,32 +645,43 @@ if st.checkbox('SHAP Dependency'):
     df = pd.read_pickle('model/df_model.p')
 
     cols = [col.replace('_shap','') for col in df.columns if '_shap' in col]
-    extra_cols = ['', '', '', '',]
+    extra_cols = cols + ['age_band_5', 'age_band_10', 'cohort_5', 'cohort_10', 'exposure_months', 'death','risk_score']
 
-    col1, col2, col3 = st.columns(3)
-
+    col1, col2 = st.columns(2)
     with col1:
         col = st.selectbox(
             'Select column for SHAP: ',
             tuple(cols),
             index=0
         )
+        outliers = st.select_slider('Eliminate outliers:', options=['No','Yes'])
+
+    if outliers == "Yes":
+        df = df[(df[col].rank(pct=True)>=0.005) & (df[col].rank(pct=True)<=0.995)]
+
     with col2:
         col_2 = st.selectbox(
             'Select column for color: ',
-            tuple(cols),
+            tuple(extra_cols),
             index=1
         )
-    with col3:
-        s = st.slider('Select dot size', min_value=10, max_value=70, value=20, step=5)
+        s = st.slider('Select dot size:', min_value=1, max_value=70, value=20, step=1)
 
-    fig = plt.figure(figsize=(10,6))
-    scr = sns.scatterplot(
-        data=df,
-        x=col, 
-        y=col+'_shap',
-        hue=col_2,
-        s=s
-    )
-    st.pyplot(fig)
+    def plot_dependence(df, col, col_2):
+            fig = plt.figure(figsize=(10,6))
+            scr = sns.scatterplot(
+                data=df,
+                x=col, 
+                y=col+'_shap',
+                hue=col_2,
+                s=s
+            )
+            st.pyplot(fig)
 
+    if st.checkbox('Filter population'):
+        filter_col, filt_low, filt_high = create_filter_widgets(cols)
+        df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
+        plot_dependence(df, col, col_2)
+    else:
+        plot_dependence(df, col, col_2)
+        
