@@ -826,7 +826,7 @@ if st.checkbox('Actual To Expected by Risk Score Group'):
 if st.checkbox('SHAP Importance'):
     df = pd.read_pickle(model_df_file)
 
-    def create_df_shap(df):
+    def create_df_shap_imp(df):
         cols = [col for col in df.columns if "_shap" in col]
         df_shap = pd.DataFrame()
         for col in cols:
@@ -839,53 +839,54 @@ if st.checkbox('SHAP Importance'):
         return df_shap
 
     # Get no filter x limits
-    df_shap = create_df_shap(df)
+    df_shap = create_df_shap_imp(df)
     xlim_age_gender = df_shap[ (df_shap['Feature']=='age') | (df_shap['Feature']=='gender')]["Importance"].max()
     xlim_not_age_gender = df_shap[ (df_shap['Feature']!='age') & (df_shap['Feature']!='gender')]["Importance"].max()
     order = list(df_shap['Feature'])
     order = [col for col in order if col not in ['age', 'gender']]
 
-    col1, col2 = st.columns(2)
-    with col1:
-        age_low = st.slider("Age Min:",0,100, value=0, step=5)
-    with col2:
-        age_high = st.slider("Age Max: ",0,100, value=100, step=5)
+    def age_gender_filter(df,key):
+        col1, col2 = st.columns(2)
+        with col1:
+            age_low = st.slider("Age Min:",0,100, value=0, step=5, key=key+'0')
+        with col2:
+            age_high = st.slider("Age Max: ",0,100, value=100, step=5,key=key+'1')
 
-    col1, col2 = st.columns(2)
-    with col1:
-        gender_low = st.slider("Gender Min:", 0, 1, value=0, step=1)
-    with col2:
-        gender_high = st.slider("Gender Max: ", 0, 1, value=1, step=1)
+        col1, col2 = st.columns(2)
+        with col1:
+            gender_low = st.slider("Gender Min:", 0, 1, value=0, step=1, key=key+'2')
+        with col2:
+            gender_high = st.slider("Gender Max: ", 0, 1, value=1, step=1, key=key+'3')
 
-    df = df[(df['age']>=age_low) & (df['age']<=age_high)]
-    df = df[(df['gender']>=gender_low) & (df['gender']<=gender_high)]
+        df = df[(df['age']>=age_low) & (df['age']<=age_high)]
+        df = df[(df['gender']>=gender_low) & (df['gender']<=gender_high)]
+
+        return df
+
+    df = age_gender_filter(df, 'shap_imp_age_gender')
 
     if st.checkbox('Apply filter to feature importance graphs'):
         filter_col, filt_low, filt_high = create_filter_widgets(df.columns, key='shap_imp')
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
 
-    #cols = [col for col in df.columns if "_shap" in col]
-    #df_shap = pd.DataFrame()
-    #for col in cols:
-    #    df_tmp = pd.DataFrame()
-    #    df_tmp["Importance"] = df[col].abs()
-    #    df_tmp["Feature"] = col.replace('_shap','')
-    #    df_shap = pd.concat([df_shap, df_tmp], axis=0)
-    df_shap = create_df_shap()
+    df_shap = create_df_shap_imp(df)
 
     df_shap = df_shap.groupby(['Feature']).agg(Importance = ('Importance','sum')).reset_index()
     df_shap = df_shap.sort_values(by=['Importance'], ascending=False)
-    
-    fig = plt.figure(figsize=(10,3))
-    ax = sns.barplot(data=df_shap, x='Feature', y='Importance', palette='Blues_r', order=["age","gender"])
-    ax.set_ylim(0,xlim_age_gender*1.05)
-    st.pyplot(fig)
 
-    if order:
-        fig = plt.figure(figsize=(10,len(order)/2))
-        ax = sns.barplot(data=df_shap, x='Importance', y='Feature', palette='Blues_r', order=order)
-        ax.set_xlim(0,xlim_not_age_gender*1.005)
+    def plot_shap_imp(df_shap, xlim_age_gender, order):
+        fig = plt.figure(figsize=(10,3))
+        ax = sns.barplot(data=df_shap, x='Feature', y='Importance', palette='Blues_r', order=["age","gender"])
+        ax.set_ylim(0,xlim_age_gender*1.05)
         st.pyplot(fig)
+
+        if order:
+            fig = plt.figure(figsize=(10,len(order)/2))
+            ax = sns.barplot(data=df_shap, x='Importance', y='Feature', palette='Blues_r', order=order)
+            ax.set_xlim(0,xlim_not_age_gender*1.005)
+            st.pyplot(fig)
+    
+    plot_shap_imp(df_shap, xlim_age_gender, order)
 
 if st.checkbox('SHAP Dependency'):
     df = pd.read_pickle(model_df_file)
@@ -906,7 +907,7 @@ if st.checkbox('SHAP Dependency'):
         x_lim_min = st.slider(col+" min", min_value=x_min , max_value=x_max, value = x_min)
 
     if outliers == "Yes":
-        df = df[(df[col].rank(pct=True)>=0.005) & (df[col].rank(pct=True)<=0.995)]
+        df = df[(df[col].rank(pct=True)>=0.01) & (df[col].rank(pct=True)<=0.99)]
 
     with col2:
         col_2 = st.selectbox(
@@ -934,7 +935,5 @@ if st.checkbox('SHAP Dependency'):
     if st.checkbox('Filter population'):
         filter_col, filt_low, filt_high = create_filter_widgets(cols, key='shap_dep')
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
-        plot_dependence(df, col, col_2)
-    else:
-        plot_dependence(df, col, col_2)
         
+    plot_dependence(df, col, col_2)
