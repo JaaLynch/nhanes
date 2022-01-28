@@ -1,11 +1,12 @@
+from tracemalloc import stop
+import seaborn as sns
+import matplotlib.pyplot as plt
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import wget
 import os
-import matplotlib.pyplot as plt
-import seaborn as sns
 import glob
 import json
 import ast
@@ -13,30 +14,95 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import xgboost, shap
 from lifelines.utils import concordance_index
+import re
 
-def create_filter_widgets(cols):
+def plot_hist(df, plot_col, figsize=(10,4), hue=None, multiple='dodge'):
+    fig = plt.figure(figsize=figsize)
+    sns.histplot(data=df, x=plot_col, hue=hue, multiple=multiple)
+    st.pyplot(fig)
+
+def null_count_df(df, plot_col):
+    df['Is Null'] = df[plot_col].isnull()
+    dist = df.groupby(['Is Null']).agg(
+        count = (df.columns[0],'count')
+        )
+    dist = dist.reset_index()
+    dist['Frequency'] = dist['count'] / dist['count'].sum()
+    st.dataframe(dist)
+
+def null_deaths_df(col):
+    df['Is Null'] = df[col].isnull()
+    dist = df.groupby(['Is Null']).agg(
+        count = ('SEQN','count'),
+        exposure_months = ('exposure_months', 'sum'),
+        death = ('death', 'sum')
+        )
+    dist = dist.reset_index()
+    dist['Frequency'] = dist['count'] / dist['count'].sum()
+    dist['Qx'] = dist['death'] / (dist['exposure_months'] / 12) * 1000
+    return dist
+
+def get_df_mort(file = 'data/main_mort.csv'):
+    df_mort = pd.read_csv(file)
+    df_mort = df_mort[df_mort['eligstat']==1]
+    df_mort = df_mort.rename(columns={
+        'publicid':'SEQN', 
+        'permth_int':'exposure_months', 
+        'mortstat':'death'
+        }
+    )
+    df_mort['death'] = df_mort['death'].astype(int)
+    df_mort['exposure_months'] = df_mort['exposure_months'].astype(float)
+    return df_mort
+
+@st.cache
+def c_index_on_df(model_df_file):
+    df = pd.read_pickle(model_df_file)
+    c_index = concordance_index(df['exposure_months'], df['pred'], df['death'])
+    return c_index
+
+def create_filter_widgets(cols, key='test'):
     col1, col2, col3 = st.columns(3)
     with col1:
         filter_col = st.selectbox(
             'First filter column',
-            tuple(cols)
+            tuple(cols),
+            key= key+'0'
         )
     with col2:
         filt_low = st.slider(
             filter_col+' min',
             df[filter_col].min(),
             df[filter_col].max(),
-            value = df[filter_col].min()
+            value = df[filter_col].min(),
+            key = key+'1'
         )
     with col3:
         filt_high = st.slider(
             filter_col+' max',
             df[filter_col].min(),
             df[filter_col].max(),
-            value = df[filter_col].max()
+            value = df[filter_col].max(),
+            key = key+'2'
         )
     return filter_col, filt_low, filt_high
 
+def age_race_filters(df):
+        col1, col2 = st.columns(2)
+        with col1:
+            pir_low = st.slider("Poverty to Income Ratio Min:", 0, 5, value=0, step=1)
+            eth_low = st.slider("Race/Ethnicity Min:", 0, 5, value=0, step=1)   
+        with col2:
+            pir_high = st.slider("Poverty to Income Ratio Max: ", 0, 5, value=5, step=1)
+            eth_high = st.slider("Race/Ethnicity Max: ", 0, 5, value=5, step=1)
+        
+        df = df[(df['pir']>=pir_low) & (df['pir']<=pir_high)]
+        df = df[(df['race']>=eth_low) & (df['race']<=eth_high)]
+        return df
+
+
+
+## -----------------
 st.title('NHANES Modeling Dashboard')
 
 url = 'https://wwwn.cdc.gov/nchs/nhanes/continuousnhanes/default.aspx'
@@ -119,11 +185,8 @@ if st.checkbox('Check to create field list with usefull names'):
     pd.DataFrame(field_list, columns=['field_list']).to_csv('data/field_list.csv', index=False)
     name_scrape_state.text('Gathering unique field names... Done!')
 
-if os.path.isfile('data/field_list.csv'):
-    field_list = pd.read_csv('data/field_list.csv')
-    field_list = field_list.field_list.values.tolist()
 
-## ---
+## ---------------
 st.subheader('Download data from CDC website')
 
 if st.checkbox('Check to download: Demographic'):
@@ -163,11 +226,12 @@ if st.checkbox('Check to download: Examination'):
     data = batch_download_data(files_exam)
     data_load_state.text("Loading data... Done!")
 
-## ---
+## ------
 st.subheader('Raw Data: Sample and Histograms')
 
 if st.checkbox('Check to view sample data and histograms'):
 
+    # Creating the drop downs
     source = st.selectbox(
         'Select Data Source: ',
         ('Demographic','Dietary','Examination','Laboratory','Questionnaire')
@@ -195,48 +259,34 @@ if st.checkbox('Check to view sample data and histograms'):
     url = table_1.replace('.XPT','.htm')
     st.markdown("[Open table documentation from CDC](%s)" % url)
 
-    df = pd.read_sas('data/'+table_1.rsplit('/',1)[1])
+    def explore_raw_data(table_1):
+        df = pd.read_sas('data/'+table_1.rsplit('/',1)[1])
 
-    st.dataframe(df.head())
+        st.dataframe(df.head())
 
-    col_list = []
-    for field in field_list:
+        field_list = pd.read_csv('data/field_list.csv')
+        field_list = field_list.field_list.values.tolist()
+
+        col_list = []
+        for field in field_list:
+            for col in df.columns:
+                if col in field:
+                    col_list.append(field)
+
+        value = st.selectbox(
+            'Select column for graphs:',
+            tuple(sorted(list(set(col_list))))
+        )
+
+        plot_col = ''
         for col in df.columns:
-            if col in field:
-                col_list.append(field)
+            if col in value:
+                plot_col = col
 
-    value = st.selectbox(
-        'Select column for graphs:',
-        tuple(sorted(list(set(col_list))))
-    )
+        plot_hist(df, plot_col)
+        null_count_df(df, plot_col)
 
-    plot_col = ''
-    for col in df.columns:
-        if col in value:
-            plot_col = col
-
-    fig = plt.figure(figsize=(10,4))
-    sns.histplot(data=df, x=plot_col)
-    st.pyplot(fig)
-
-    if st.checkbox('Check to show multiperiod histogram'):
-        files_local = ['data/'+file.rsplit('/',1)[1] for file in files]
-        periods = [file.split("/")[-2] for file in files]
-        df_agg = pd.DataFrame()
-        for period, file_local in zip(periods, files_local):
-            df_tmp = pd.read_sas(file_local)
-            if plot_col in df_tmp.columns:
-                df_agg_tmp = pd.DataFrame(
-                    {
-                        plot_col: df_tmp[plot_col],
-                        'period': period
-                    }
-                )
-                df_agg = pd.concat([df_agg, df_agg_tmp])
-
-        fig = plt.figure(figsize=(10,4))
-        sns.histplot(data=df_agg, x=plot_col, hue='period', multiple='dodge')
-        st.pyplot(fig)
+    explore_raw_data(table_1)
 
 ## ---
 st.subheader('Create required intermediate tables')
@@ -245,13 +295,11 @@ def create_multiperiod_tables():
     files_full = glob.glob('data/*.XPT')
     files_full = sorted(files_full)
     files_short = [file.rsplit('/',1)[1] for file in files_full]
-    files_short = [file.rsplit('_',1)[0] for file in files_short]
     files_short = [file.replace('.XPT','') for file in files_short]
-    
+    files_short = [file[:-2] if file[-2:-1]=="_" else file for file in files_short]
     files_full = [x for _, x in sorted(zip(files_short, files_full))]
     files_short = sorted(files_short)
-    
-    file_short = ''
+
     df = pd.DataFrame()
     for file_short, file_full, next_file_short in zip(files_short, files_full, files_short[1:]):
         outfile = 'data/main_' + file_short + '.csv'
@@ -282,7 +330,50 @@ def stack_mortality(files_mort):
         df_tmp['data_source'] = file.rsplit('/', 1)[1]
         df_mort = pd.concat([df_mort, df_tmp])
     df_mort.to_csv('data/main_mort.csv', index=False)
-    return df_mort
+
+    # to create the stacked intermediate table for RX
+    # Woops move this out of mortality :(
+    df = pd.read_csv('data/main_RXQ_RX.csv', low_memory=False)
+    df = df[(df['RXD030']==1)|(df['RXDUSE']==1)]
+    df = df.groupby(['SEQN']).agg(
+        count1 = ('RXD295','max'),
+        count2 = ('RXDCOUNT','max'),
+        days1 = ('RXD260','sum'),
+        days2 = ('RXDDAYS','sum')
+    ).reset_index()
+    df['rx_script_count'] = df[['count1','count2']].sum(axis=1)
+    df['rx_total_days'] = df[['days1','days2']].sum(axis=1)
+    df = df.rename(columns={'SEQN':'id'})
+    df = df.drop(columns=['count1','count2','days1','days2'])
+    df.to_csv('data/main_mort_rx.csv', index=False)
+
+    df = pd.read_csv('data/main_RXQ_RX.csv', low_memory=False)
+    df = df[(df['RXD030']==1)|(df['RXDUSE']==1)]
+    df['rx_script_count'] = df[['RXD295','RXDCOUNT']].sum(axis=1)
+    df['rx_total_days'] = df[['RXD260','RXDDAYS']].sum(axis=1)
+    tmp = df.groupby(['RXDDRGID','FDACODE1']).agg(count=('SEQN','count')).reset_index()
+    tmp = tmp.sort_values(by='count', ascending=False)
+    tmp = tmp[tmp['FDACODE1']!="b''"]
+    tmp = tmp[tmp['RXDDRGID']!="b''"]
+    tmp['rx_class'] = tmp['FDACODE1'].str[2:4]
+    tmp = tmp.drop(columns=['FDACODE1','count'])
+    df = pd.merge(df, tmp, on='RXDDRGID', how='left')
+    tmp = df
+    cols = ['SEQN','rx_class']
+    tmp[cols] = tmp[cols].fillna(".").astype(str)
+    tmp = tmp.groupby(cols).agg(
+        rx_script_count=('SEQN','count'),
+        rx_total_days=('rx_total_days', 'sum')
+    ).reset_index()
+    keep_classes = ['03','05', '06', '09','10','17', '19']
+    tmp['rx_class'] = np.where(tmp['rx_class'].isin(keep_classes), tmp['rx_class'],'00')
+    tmp = tmp.pivot_table(index='SEQN',columns='rx_class',values=['rx_script_count','rx_total_days'], aggfunc='sum')
+    tmp.columns = list(map("_".join, tmp.columns))
+    tmp = tmp.reset_index()
+    tmp = tmp.rename(columns={'SEQN':'id'})
+    tmp.to_csv('data/main_mort_rx_class.csv', index=False)
+
+    return df_mort, df
 
 if st.checkbox('Check to create multiperiod tables'):
     data_load_state = st.text('Combining data...')
@@ -293,6 +384,27 @@ if st.checkbox('Check to create multiperiod mortality'):
     data_load_state = st.text('Combining data...')
     if not os.path.exists('data/main_mort.csv'): stack_mortality(files_mort)
     data_load_state.text("Combining data... Done!")
+
+if st.checkbox('Explore multiperiod tables'):
+    multiperiod_tables = sorted(glob.glob('data/main_*.csv'))
+    multiperiod_table = st.selectbox(
+        'Select multiperiod table',
+        tuple(multiperiod_tables)
+    )
+
+    df = pd.read_csv(multiperiod_table)
+    df_mort = get_df_mort(file='data/main_mort.csv')
+    df = pd.merge(df, df_mort, on='SEQN', how='left')
+
+    multiperiod_table_col = st.selectbox(
+        'Select column',
+        tuple(sorted(df.columns))
+    )
+
+    plot_hist(df, multiperiod_table_col)
+    dist = null_deaths_df(multiperiod_table_col)
+    st.dataframe(dist)
+
 
 ## ---
 st.subheader('Mortality Modeling')
@@ -311,7 +423,7 @@ def create_modeling_data(feature_meta):
         df_tmp['id'] = df_tmp['id'].astype(int)
 
         df_tmp = df_tmp.rename(columns={feature['column_name']:feature['alias']})
-        if feature['fillna']:
+        if feature['fillna'] is not None:
             df_tmp[feature['alias']] = df_tmp[feature['alias']].fillna(feature['fillna'])
             
         if feature['alias'] == 'id':
@@ -319,13 +431,13 @@ def create_modeling_data(feature_meta):
         else:
             cols = ['id']+[feature['alias']]
             print(cols)
-            if feature['encoding']:
+            if feature['encoding'] is not None:
                 df_tmp[feature['alias']] = df_tmp[feature['alias']].replace(ast.literal_eval(feature['encoding']))
                 if feature['encoding_names']:
                     enc_col = feature['alias']+'_values'
                     cols = cols + [enc_col]
                     df_tmp[enc_col] = df_tmp[feature['alias']].replace(ast.literal_eval(feature['encoding_names']))
-            if feature['type']:
+            if feature['type'] is not None:
                 print(feature['alias'])
                 df_tmp[feature['alias']] = df_tmp[feature['alias']].astype(feature['type'])
             df = pd.merge(df, df_tmp[cols], on='id', how='left') 
@@ -354,10 +466,12 @@ if st.checkbox('Check to create modeling data'):
     df['mort_elig'] = df['mort_elig'].astype(int)
     df['death'] = df['death'].astype(int)
     df['pir'] = df['pir'].round(1)
+    df['pir_bin'] = df['pir'].round(0)
     
     bins = [0,10,20,30,40,50,60,70,80,90,100]
     labels = ["00-09","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80-89","90-99"]
     df['age_band_10'] = pd.cut(df['age'], bins, labels=labels, include_lowest=True, right=False)
+    df['age_band_10_values'] = pd.cut(df['age'], bins, labels=bins[:-1], include_lowest=True, right=False).fillna(0).astype(int)
 
     bins = [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
     labels = [
@@ -366,14 +480,75 @@ if st.checkbox('Check to create modeling data'):
         "60-64","65-69","70-74","75-79","80-84","85-89","90-94","95-99"
     ]
     df['age_band_5'] = pd.cut(df['age'], bins, labels = labels, include_lowest = True, right=False)
+    df['age_band_5_values'] = pd.cut(df['age'], bins, labels = bins[:-1], include_lowest = True, right=False).fillna(0).astype(int)
 
     df['cohort_5'] = df['gender_values'].astype('str')+"-"+df['age_band_5'].astype('str')
     df['cohort_10'] = df['gender_values'].astype('str')+"-"+df['age_band_10'].astype('str')
+    
+    df['ex_vis_gl'] = df[['ex_vis_gl_n', 'ex_vis_gl_f']].max(axis=1)
+    df['ex_vis_ac'] = df[['ex_vis_ac_r','ex_vis_ac_l']].max(axis=1)
+    df['ex_vis_ker_cyl'] = df[['ex_vis_ker_cyl_r','ex_vis_ker_cyl_l']].max(axis=1)
+    df['ex_vis_ker_rad'] = df[['ex_vis_ker_rad_r','ex_vis_ker_rad_l']].max(axis=1)
+    df['ex_vis_ker_axs'] = df[['ex_vis_ker_axs_r','ex_vis_ker_axs_l']].max(axis=1)
+    df['ex_vis_ker_pow'] = df[['ex_vis_ker_pow_r','ex_vis_ker_pow_l']].max(axis=1)
+    df['ex_vis_axs'] = df[['ex_vis_axs_r','ex_vis_axs_l']].max(axis=1)
+    df['ex_vis_cyl'] = df[['ex_vis_cyl_r','ex_vis_cyl_l']].max(axis=1)
+    df['ex_vis_sph'] = df[['ex_vis_sph_r','ex_vis_sph_l']].max(axis=1)
+
+    df['bmi_calc'] = df['ex_ht'] / (df['ex_wt'] ** 2)
+
+    df['qs_alc_cnt_avg'] = np.where(df['qs_alc_cnt_avg']>36, 36, df['qs_alc_cnt_avg'])
+    df['qs_alc_nday_5p']=np.where(df['qs_alc_nday_5p_new'].isnull(),df['qs_alc_nday_5p_old'],df['qs_alc_nday_5p_new'])
+    df['qs_alc_nday_5p_life']=np.where(df['qs_alc_nday_5p_life_new'].isnull(),df['qs_alc_nday_5p_life_old'],df['qs_alc_nday_5p_life_new'])
+    
+    df['qs_hear_gen'] = np.where(df['qs_hear_gen_new'].isnull(),df['qs_hear_gen_med'],df['qs_hear_gen_new'])
+    df['qs_hear_gen'] = np.where(df['qs_hear_gen'].isnull(),df['qs_hear_gen_old'],df['qs_hear_gen'])
+
+    df['qs_hear_gun'] = np.where(df['qs_hear_gun_new'].isnull(),df['qs_hear_gun_med'],df['qs_hear_gun_new'])
+    df['qs_hear_gun'] = np.where(df['qs_hear_gun'].isnull(),df['qs_hear_gun_old'],df['qs_hear_gun'])
+
+    df['qs_drm_sun_resp'] = np.where(df['qs_drm_sun_resp_new'].isna(),df['qs_drm_sun_resp_old'],df['qs_drm_sun_resp_new'])
+    df['qs_drm_sun_resp'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drm_sun_resp'], np.nan)
+
+    df['qs_drm_moles'] = np.where(df['qs_drm_moles_new'].isna(),df['qs_drm_moles_old'],df['qs_drm_moles_new'])
+    df['qs_drm_moles'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drm_moles'], np.nan)
+
+    df['qs_drugs'] = np.where(df['qs_drugs_new'].isna(),df['qs_drugs_old'],df['qs_drugs_new'])
+    df['qs_drugs'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drugs'], np.nan)
+
+    df['qs_health_ins'] = np.where(df['qs_health_ins_new'].isna(),df['qs_health_ins_old'],df['qs_health_ins_new'])
+    df['qs_health_ntimes'] = np.where(df['qs_health_ntimes_new'].isna(),df['qs_health_ntimes_old'],df['qs_health_ntimes_new'])
+
+    df['qs_kidney'] = np.where(df['qs_kidney_new'].isna(),df['qs_kidney_old'],df['qs_kidney_new'])
+
+    df['qs_alc_any'] = np.where(df['qs_alc_any_new'].isna(),df['qs_alc_any_old'],df['qs_alc_any_new'])
+
+    df['qs_alc_any'] = np.where(df['qs_alc_any_new'].isnull(),df['qs_alc_any_med'],df['qs_alc_any_new'])
+    df['qs_alc_any'] = np.where(df['qs_alc_any'].isnull(),df['qs_alc_any_old'],df['qs_alc_any'])
+
+    df['lab_alt'] = df[['lab_alt_new','lab_alt_med','lab_alt_old']].sum(axis=1, min_count=1)
+    df['lab_ast'] = df[['lab_ast_new','lab_ast_med','lab_ast_old']].sum(axis=1, min_count=1)
+    df['lab_bicarb'] = df[['lab_bicarb_new','lab_bicarb_med','lab_bicarb_old']].sum(axis=1, min_count=1)
+    df['lab_chol'] = df[['lab_chol_new','lab_chol_med','lab_chol_old']].sum(axis=1, min_count=1)
+    df['lab_ggt'] = df[['lab_ggt_new','lab_ggt_med','lab_ggt_old']].sum(axis=1, min_count=1)
+    df['lab_glucose'] = df[['lab_glucose_new','lab_glucose_med','lab_glucose_old']].sum(axis=1, min_count=1)
+    df['lab_phosphorus'] = df[['lab_phosphorus_new','lab_phosphorus_med','lab_phosphorus_old']].sum(axis=1, min_count=1)
+    df['lab_protein'] = df[['lab_protein_new','lab_protein_med','lab_protein_old']].sum(axis=1, min_count=1)
+    df['lab_sodium'] = df[['lab_sodium_new','lab_sodium_med','lab_sodium_old']].sum(axis=1, min_count=1)
+    df['lab_triglyc'] = df[['lab_triglyc_new','lab_triglyc_med','lab_triglyc_old']].sum(axis=1, min_count=1)
+    df['lab_uric_acid'] = df[['lab_uric_acid_new','lab_uric_acid_med','lab_uric_acid_old']].sum(axis=1, min_count=1)
+    df['lab_ldh'] = df[['lab_ldh_new','lab_ldh_med','lab_ldh_old']].sum(axis=1, min_count=1)
+    
+    # Attach rx_script_count and rx_total_days, and by class
+    tmp = pd.read_csv('data/main_mort_rx.csv')
+    df = pd.merge(df,tmp, on='id', how='left')
+    df['rx_total_days'] = np.where(df['rx_total_days']>100000,100000,df['rx_total_days'])
+    tmp = pd.read_csv('data/main_mort_rx_class.csv')
+    df = pd.merge(df,tmp, on='id', how='left')
+
     # End feature engineering
-
-    st.dataframe(df.head())
-
     df = df.reset_index()
+    st.dataframe(df.head())
 
     df.to_pickle('data/modeling.p')
     write_state.text('Creating data/modeling.p...Done!')
@@ -382,11 +557,12 @@ if st.checkbox('Check to create modeling data'):
 
 if st.checkbox('Check to explore modeling data'):
     df = pd.read_pickle('data/modeling.p')
+
     st.dataframe(df.head(100))
 
     col = st.selectbox(
         'Select field to show frequency distribution',
-        tuple(df.columns[1:]),
+        tuple(sorted(df.columns[1:])),
         index=23
     )
 
@@ -396,6 +572,12 @@ if st.checkbox('Check to explore modeling data'):
     fig = plt.figure(figsize=(10,6))
     sns.histplot(data=df, x=col)
     st.pyplot(fig)
+
+    if str(df[col].dtype) != "float64":
+        df[col] = df[col].astype(str)
+    if (str(df[col].dtype) != "float64") & (len(df[col].unique())>100):
+        df[col] = df[col].astype(str)
+
 
     df['Is Null'] = df[col].isnull()
     dist = df.groupby(['Is Null']).agg(
@@ -413,7 +595,9 @@ if st.checkbox('Check to explore modeling data'):
     col_tmp = col
     if str(df[col_tmp].dtype) == "float64":
         col_tmp = col+'_bin'
-        df[col_tmp] = pd.qcut(df[col], q=[0,0.25,0.5,0.75,1])
+        df[col_tmp] = pd.qcut(df[col], q=[0,0.25,0.5,0.75,1], duplicates='drop')
+    if (str(df[col].dtype) == "float64") & (len(df[col].unique())<101):
+        df[col_tmp] = df[col].astype(str)
     dist = df.groupby([col_tmp]).agg(
         count = ('id','count'),
         exposure_months = ('exposure_months', 'sum'),
@@ -444,13 +628,22 @@ if st.checkbox('Check to create model'):
 
     features = st.multiselect(
         'Select model features',
-        list(df.columns),
+        sorted(df.columns),
         default=['age','gender']
     )
 
-    num_boost_round = st.slider('Number of training iterations:', min_value=0, max_value=10000, step=100)
+    col1, col2 = st.columns(2)
+    with col1:
+        model_name = st.text_input(
+                'Enter a name for your model: ' 
+        )
+        train_button = st.button('Train Model')
+    with col2:
+        if not model_name:
+            model_name = 'blank'
+        num_boost_round = st.slider('Number of training iterations:', min_value=0, max_value=5000, step=100)
+        
 
-    train_button = st.button('Train Model')
     if train_button:
         my_bar = st.progress(0)
         text = st.text('Training...')
@@ -488,9 +681,6 @@ if st.checkbox('Check to create model'):
         c_index = concordance_index(df['exposure_months'], model.predict(xgb_full), df['death'])
         st.text("C-Index: "+str(round(1-c_index,5)))
 
-        outfile = 'model/model.json'
-        model.save_model(outfile)
-
         text = st.text("Calculating shap values...")
         cols=[feature+'_shap' for feature in features]
         shap_values = shap.TreeExplainer(model).shap_values(X)
@@ -527,83 +717,131 @@ if st.checkbox('Check to create model'):
         labels = ["00-19","20-39","40-59","60-79","80-89","90-94","95-100"]
         df['risk_group'] = pd.cut(df['pred_pct_cohort_10'], bins, labels=labels, include_lowest=True)
 
-        st.dataframe(df.head())
+        st.text("Number of deaths in model: "+str(df.death.fillna(0).sum()))
 
         text = st.text('Saving data...')
-        df.to_pickle('model/df_model.p')
-        text.text('Saving data...Done! Data saved to: model/df_model.p')
+        file_name = 'model/model_df_'+ model_name +'.p'
+        df.to_pickle(file_name)
+       
+        outfile = 'model/model_'+ model_name +'.json'
+        model.save_model(outfile)
+
+        text.markdown(
+            'Saving data...Done! Data saved to '+ file_name + '. Model saved to '+ outfile
+        )
+
+        st.dataframe(df.head())
 
 st.subheader('Model Understanding and Evaluation')
 
+model_files = glob.glob('model/model_*.json')
+model_df_files = glob.glob('model/model_df*.p')
+model_names = [file.replace('model/model_','').replace('.json','') for file in model_files]
+model_selected = st.selectbox(
+    'Select a model:',
+    tuple(model_names)
+)
+if not model_selected:
+    model_selected = 'baseline_age_gender'
+model_file = 'model/model_' + model_selected + '.json'
+model_df_file = 'model/model_df_' + model_selected + '.p'
+
+c_index = c_index_on_df(model_df_file)
+st.text("C-Index: "+str(round(1-c_index,4)))
+
 if st.checkbox('Risk Score Distribution'):
-    df = pd.read_pickle('model/df_model.p')
-    cols = [col.replace('_shap','') for col in df.columns if '_shap' in col]
+    df = pd.read_pickle(model_df_file)
+    df = age_race_filters(df)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        pir_low = st.slider("Poverty to Income Ratio Min:", 0, 5, value=3, step=1)
-        eth_low = st.slider("Race/Ethnicity Min:", 0, 5, value=3, step=1)   
-    with col2:
-        pir_high = st.slider("Poverty to Income Ratio Max: ", 0, 5, value=5, step=1)
-        eth_high = st.slider("Race/Ethnicity Max: ", 0, 5, value=4, step=1)
-        
-    df = df[(df['pir']>=pir_low) & (df['pir']<=pir_high)]
-    df = df[(df['race']>=eth_low) & (df['race']<=eth_high)]
-
+    cols = df.columns
     if st.checkbox('Apply filter to population'):
-        filter_col, filt_low, filt_high = create_filter_widgets(cols)
+        filter_col, filt_low, filt_high = create_filter_widgets(cols, key='risk_score_dist')
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
 
-    fig = plt.figure(figsize=(10,6))
-    sns.histplot(data=df, x="risk_score")
-    st.pyplot(fig)
+    def plot_risk_score(df, figsize=(10,6)):
+        fig = plt.figure(figsize=figsize)
+        ax = sns.kdeplot(data=df, x="risk_score")
+        mean = round(df["risk_score"].mean(),3)
+        median = round(df["risk_score"].median(),3)
+        #plt.axvline(x=mean, c='black')
+        plt.axvline(x=median, c='grey')
+        ax.set_xlim(-0.2,1.2)
+        st.pyplot(fig)
+        st.text("Mean Risk Score: "+ str(mean))
+        st.text("Median Risk Score (grey): "+ str(median))
+    
+    plot_risk_score(df)
 
 if st.checkbox('Actual To Expected by Risk Score Group'):
-    df = pd.read_pickle('model/df_model.p')
-    cols = [col.replace('_shap','') for col in df.columns if '_shap' in col]
+    df = pd.read_pickle(model_df_file)
+    df['All cohorts'] = 1
+    cols = df.columns
     
     hue = st.selectbox(
         'Select variable used to color bars',
-        tuple(['gender','age_band_5','age_band_10','cohort_5','cohort_10'])
+        tuple(['All cohorts','gender','age_band_5','age_band_10','cohort_5','cohort_10','pir_bin','race' ])
     )
     
     if st.checkbox('Apply filter to actual to expected chart'):
-        filter_col, filt_low, filt_high = create_filter_widgets(cols)
+        filter_col, filt_low, filt_high = create_filter_widgets(cols, key='ae')
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
 
-    ae = df.groupby([hue,'risk_group']).agg(
-        life_years = ('exposure_months','sum'),
-        expected_deaths = ('expected_deaths','sum'), 
-        actual_deaths = ('death','sum')
-    )
-    ae['ae'] = ae['actual_deaths']/ae['expected_deaths']*100
-    ae['life_years'] = ae['life_years']/12
-    ae = ae.reset_index()
+    def calculate_ae(df,hue):
+        ae = df.groupby([hue,'risk_group']).agg(
+            life_years = ('exposure_months','sum'),
+            expected_deaths = ('expected_deaths','sum'), 
+            actual_deaths = ('death','sum')
+        )
+        ae['ae'] = ae['actual_deaths']/ae['expected_deaths']*100
+        ae['life_years'] = ae['life_years']/12
+        ae['actual_deaths_cum'] = ae.groupby([hue])['actual_deaths'].cumsum()
+        ae['expected_deaths_cum'] = ae.groupby([hue])['expected_deaths'].cumsum()
+        ae['cumulative_ae'] = ae['actual_deaths_cum']/ae['expected_deaths_cum']*100
+        ae = ae.reset_index()
+        ae['life_years_sum']=ae[hue].map(ae.groupby(hue)["life_years"].sum())
+        ae['Frequency'] = ae['life_years']/ae['life_years_sum']
+        return ae
 
-    fig = plt.figure(figsize=(10,6))
-    sns.barplot(data=ae, x='risk_group', y='ae', hue=hue)
-    st.pyplot(fig)
+    ae = calculate_ae(df, hue)
 
-    ae['life_years_sum']=ae[hue].map(ae.groupby(hue)["life_years"].sum())
-    ae['Frequency'] = ae['life_years']/ae['life_years_sum']
- 
-    fig = plt.figure(figsize=(10,3))
-    sns.barplot(data=ae, x='risk_group', y='Frequency', hue=hue)
-    st.pyplot(fig)
+    def plot_ae(ae,figsize=(10,3)):
+        fig = plt.figure(figsize=figsize)
+        sns.barplot(data=ae, x='risk_group', y='ae', hue=hue)
+        st.pyplot(fig)
+
+        fig = plt.figure(figsize=figsize)
+        sns.barplot(data=ae, x='risk_group', y='cumulative_ae', hue=hue)
+        st.pyplot(fig)
+    
+        fig = plt.figure(figsize=(figsize[0], figsize[1]/2))
+
+        sns.barplot(data=ae, x='risk_group', y='Frequency', hue=hue)
+        plt.legend([],[], frameon=False)
+        st.pyplot(fig)
+
+    plot_ae(ae)
+
+    st.dataframe(ae)
 
 if st.checkbox('SHAP Importance'):
-    df = pd.read_pickle('model/df_model.p')
-    
-    # This one just for the order :(
-    cols = [col for col in df.columns if "_shap" in col]
-    df_shap = pd.DataFrame()
-    for col in cols:
-        df_tmp = pd.DataFrame()
-        df_tmp["Importance"] = df[col].abs()
-        df_tmp["Feature"] = col.replace('_shap','')
-        df_shap = pd.concat([df_shap, df_tmp], axis=0)
-    df_shap = df_shap.groupby(['Feature']).agg(Importance = ('Importance','sum')).reset_index()
-    df_shap = df_shap.sort_values(by=['Importance'], ascending=False)
+    df = pd.read_pickle(model_df_file)
+
+    def create_df_shap(df):
+        cols = [col for col in df.columns if "_shap" in col]
+        df_shap = pd.DataFrame()
+        for col in cols:
+            df_tmp = pd.DataFrame()
+            df_tmp["Importance"] = df[col].abs()
+            df_tmp["Feature"] = col.replace('_shap','')
+            df_shap = pd.concat([df_shap, df_tmp], axis=0)
+        df_shap = df_shap.groupby(['Feature']).agg(Importance = ('Importance','sum')).reset_index()
+        df_shap = df_shap.sort_values(by=['Importance'], ascending=False)
+        return df_shap
+
+    # Get no filter x limits
+    df_shap = create_df_shap(df)
+    xlim_age_gender = df_shap[ (df_shap['Feature']=='age') | (df_shap['Feature']=='gender')]["Importance"].max()
+    xlim_not_age_gender = df_shap[ (df_shap['Feature']!='age') & (df_shap['Feature']!='gender')]["Importance"].max()
     order = list(df_shap['Feature'])
     order = [col for col in order if col not in ['age', 'gender']]
 
@@ -622,30 +860,37 @@ if st.checkbox('SHAP Importance'):
     df = df[(df['age']>=age_low) & (df['age']<=age_high)]
     df = df[(df['gender']>=gender_low) & (df['gender']<=gender_high)]
 
-    cols = [col for col in df.columns if "_shap" in col]
-    df_shap = pd.DataFrame()
-    for col in cols:
-        df_tmp = pd.DataFrame()
-        df_tmp["Importance"] = df[col].abs()
-        df_tmp["Feature"] = col.replace('_shap','')
-        df_shap = pd.concat([df_shap, df_tmp], axis=0)
+    if st.checkbox('Apply filter to feature importance graphs'):
+        filter_col, filt_low, filt_high = create_filter_widgets(df.columns, key='shap_imp')
+        df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
+
+    #cols = [col for col in df.columns if "_shap" in col]
+    #df_shap = pd.DataFrame()
+    #for col in cols:
+    #    df_tmp = pd.DataFrame()
+    #    df_tmp["Importance"] = df[col].abs()
+    #    df_tmp["Feature"] = col.replace('_shap','')
+    #    df_shap = pd.concat([df_shap, df_tmp], axis=0)
+    df_shap = create_df_shap()
 
     df_shap = df_shap.groupby(['Feature']).agg(Importance = ('Importance','sum')).reset_index()
     df_shap = df_shap.sort_values(by=['Importance'], ascending=False)
     
     fig = plt.figure(figsize=(10,3))
-    sns.barplot(data=df_shap, x='Feature', y='Importance', palette='Blues_r', order=["age","gender"])
+    ax = sns.barplot(data=df_shap, x='Feature', y='Importance', palette='Blues_r', order=["age","gender"])
+    ax.set_ylim(0,xlim_age_gender*1.05)
     st.pyplot(fig)
 
-    fig = plt.figure(figsize=(10,len(order)/2))
-    sns.barplot(data=df_shap, x='Importance', y='Feature', palette='Blues_r', order=order)
-    st.pyplot(fig)
+    if order:
+        fig = plt.figure(figsize=(10,len(order)/2))
+        ax = sns.barplot(data=df_shap, x='Importance', y='Feature', palette='Blues_r', order=order)
+        ax.set_xlim(0,xlim_not_age_gender*1.005)
+        st.pyplot(fig)
 
 if st.checkbox('SHAP Dependency'):
-    df = pd.read_pickle('model/df_model.p')
+    df = pd.read_pickle(model_df_file)
 
     cols = [col.replace('_shap','') for col in df.columns if '_shap' in col]
-    extra_cols = cols + ['age_band_5', 'age_band_10', 'cohort_5', 'cohort_10', 'exposure_months', 'death','risk_score']
 
     col1, col2 = st.columns(2)
     with col1:
@@ -656,17 +901,24 @@ if st.checkbox('SHAP Dependency'):
         )
         outliers = st.select_slider('Eliminate outliers:', options=['No','Yes'])
 
+        x_max = df[col].max()
+        x_min = df[col].min()
+        x_lim_min = st.slider(col+" min", min_value=x_min , max_value=x_max, value = x_min)
+
     if outliers == "Yes":
         df = df[(df[col].rank(pct=True)>=0.005) & (df[col].rank(pct=True)<=0.995)]
 
     with col2:
         col_2 = st.selectbox(
             'Select column for color: ',
-            tuple(extra_cols),
-            index=1
+            tuple(sorted(df.columns)),
+            index=sorted(df.columns).index('gender')
         )
         s = st.slider('Select dot size:', min_value=1, max_value=70, value=20, step=1)
 
+        x_lim_max = st.slider(col+" max", min_value=x_min , max_value=x_max, value = x_max)
+
+    h = (x_max - x_min) / 100
     def plot_dependence(df, col, col_2):
             fig = plt.figure(figsize=(10,6))
             scr = sns.scatterplot(
@@ -676,10 +928,11 @@ if st.checkbox('SHAP Dependency'):
                 hue=col_2,
                 s=s
             )
+            scr.set(xlim=(x_lim_min-h, x_lim_max*1.02))
             st.pyplot(fig)
 
     if st.checkbox('Filter population'):
-        filter_col, filt_low, filt_high = create_filter_widgets(cols)
+        filter_col, filt_low, filt_high = create_filter_widgets(cols, key='shap_dep')
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
         plot_dependence(df, col, col_2)
     else:

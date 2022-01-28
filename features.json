@@ -10,6 +10,17 @@
           "type":"int",
           "encoding_names":null
        },
+       
+       {
+         "id":"103",
+         "table_name":"data/main_DEMO.csv",
+         "column_name":"SDDSRVYR",
+         "alias":"study_period",
+         "fillna":null,
+         "encoding":null,
+         "type":"int",
+         "encoding_names":null
+       },
        {
           "id":"2",
           "table_name":"data/main_DEMO.csv",
@@ -114,7 +125,7 @@
         "id":"12",
         "table_name":"data/main_BPX.csv",
         "column_name":"BPXPLS",
-        "alias":"pulse",
+        "alias":"ex_pulse",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -164,29 +175,27 @@
         "id":"17",
         "table_name":"data/main_BPX.csv",
         "column_name":"BPXPULS",
-        "alias":"pulse_irregular",
+        "alias":"ex_pulse_irr",
         "fillna":".",
         "encoding":"{'.':0, 1:0, 2:1}",
         "type":"int",
         "encoding_names":"{0:'Regular', 1:'Irregular'}"
        },
-
-
        {
-        "id":"18",
-        "table_name":"data/main_BMX.csv",
-        "column_name":"BMXHEAD",
-        "alias":"bm_head",
+        "id":"30",
+        "table_name":"data/main_BPX.csv",
+        "column_name":"BPXML1",
+        "alias":"ex_bp_max_inf",
         "fillna":null,
-        "encoding":null,
-        "type":null,
+        "encoding":"{888:None, '.':None}",
+        "type":"float",
         "encoding_names":null
        },
        {
         "id":"19",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXWT",
-        "alias":"bm_wt",
+        "alias":"ex_wt",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -196,7 +205,7 @@
         "id":"20",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXHT",
-        "alias":"bm_ht",
+        "alias":"ex_ht",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -206,7 +215,7 @@
         "id":"21",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXBMI",
-        "alias":"bm_bmi",
+        "alias":"ex_bmi",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -216,7 +225,7 @@
         "id":"22",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXWAIST",
-        "alias":"bm_waist",
+        "alias":"ex_waist",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -226,7 +235,7 @@
         "id":"23",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXLEG",
-        "alias":"bm_leg",
+        "alias":"ex_leg",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -236,7 +245,7 @@
         "id":"24",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXARMC",
-        "alias":"bm_armc",
+        "alias":"ex_armc",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -246,7 +255,7 @@
         "id":"25",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXARML",
-        "alias":"bm_arml",
+        "alias":"ex_arml",
         "fillna":null,
         "encoding":null,
         "type":null,
@@ -256,43 +265,1168 @@
         "id":"26",
         "table_name":"data/main_BMX.csv",
         "column_name":"BMXTRI",
-        "alias":"bm_tri",
+        "alias":"ex_tri",
         "fillna":null,
         "encoding":null,
         "type":null,
         "encoding_names":null
        },
+       {
+        "id":"31",
+        "table_name":"data/main_OHXREF.csv",
+        "column_name":"OHAREC",
+        "alias":"ex_dent_gen",
+        "fillna":null,
+        "encoding":"{'.':4}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"32",
+        "table_name":"data/main_OHXREF.csv",
+        "column_name":"OHAROCDT",
+        "alias":"ex_dent_cav",
+        "fillna":0,
+        "encoding":"{'.':0, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"33",
+        "table_name":"data/main_OHXREF.csv",
+        "column_name":"OHAROCGP",
+        "alias":"ex_dent_gum",
+        "fillna":0,
+        "encoding":"{'.':0, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"34",
+        "table_name":"data/main_OHXREF.csv",
+        "column_name":"OHAROCOH",
+        "alias":"ex_dent_hygn",
+        "fillna":0,
+        "encoding":"{'.':0, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+
+
+       {
+        "id":"35",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIQ150",
+        "alias":"ex_vis_gl_n",
+        "fillna":0,
+        "encoding":"{'.':0, 9:0,2:0}",
+        "type":"int",
+        "encoding_names":null
+       },
+       {
+        "id":"36",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIQ220",
+        "alias":"ex_vis_gl_f",
+        "fillna":0,
+        "encoding":"{'.':0, 9:0,2:0}",
+        "type":"int",
+        "encoding_names":null
+       },
+       {
+        "id":"37",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIDRVA",
+        "alias":"ex_vis_ac_r",
+        "fillna":0,
+        "encoding":"{888:0, '.':0, 20:0, 25:1, 30:2, 40:3, 50:4, 60:5, 80:6, 200:7, 666:8}",
+        "type":"int",
+        "encoding_names":null
+       },
+       {
+        "id":"38",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIDLVA",
+        "alias":"ex_vis_ac_l",
+        "fillna":0,
+        "encoding":"{888:0, '.':0, 20:0, 25:1, 30:2, 40:3, 50:4, 60:5, 80:6, 200:7, 666:8}",
+        "type":"int",
+        "encoding_names":null
+       },
+       {
+        "id":"39",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXORSM",
+        "alias":"ex_vis_sph_r",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"40",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXORCM",
+        "alias":"ex_vis_cyl_r",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"41",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXORAM",
+        "alias":"ex_vis_axs_r",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"42",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKLMM",
+        "alias":"ex_vis_ker_rad_l",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"43",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKLDM",
+        "alias":"ex_vis_ker_pow_l",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"44",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKLCD",
+        "alias":"ex_vis_ker_cyl_l",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"45",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKLCG",
+        "alias":"ex_vis_ker_axs_l",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"46",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKRMM",
+        "alias":"ex_vis_ker_rad_r",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"47",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKRDM",
+        "alias":"ex_vis_ker_pow_r",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"48",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKRCD",
+        "alias":"ex_vis_ker_cyl_r",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"49",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXKRCG",
+        "alias":"ex_vis_ker_axs_r",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"50",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXOLSM",
+        "alias":"ex_vis_sph_l",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"51",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXOLCM",
+        "alias":"ex_vis_cyl_l",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"52",
+        "table_name":"data/main_VIX.csv",
+        "column_name":"VIXOLAM",
+        "alias":"ex_vis_axs_l",
+        "fillna":null,
+        "encoding":"{88:None, 888:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+         "id":"68",
+         "table_name":"data/main_CVX.csv",
+         "column_name":"CVDESVO2",
+         "alias":"ex_cardio_vo2",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"69",
+         "table_name":"data/main_CVX.csv",
+         "column_name":"CVDFITLV",
+         "alias":"ex_cardio_fit",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+ 
 
 
        {
         "id":"27",
         "table_name":"data/main_ALQ.csv",
-        "column_name":"ALQ101",
-        "alias":"al_annual",
+        "column_name":"ALQ100",
+        "alias":"qs_alc_any_old",
         "fillna":null,
-        "encoding":null,
-        "type":null,
+        "encoding":"{'.':None, 9:None, 7:None, 2:0}",
+        "type":"float",
         "encoding_names":null
        },
        {
+         "id":"104",
+         "table_name":"data/main_ALQ.csv",
+         "column_name":"ALD100",
+         "alias":"qs_alc_any_med",
+         "fillna":null,
+         "encoding":"{'.':None, 9:None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"105",
+         "table_name":"data/main_ALQ.csv",
+         "column_name":"ALQ101",
+         "alias":"qs_alc_any_new",
+         "fillna":null,
+         "encoding":"{'.':None, 9:None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+
+       {
         "id":"28",
         "table_name":"data/main_ALQ.csv",
-        "column_name":"ALQ110",
-        "alias":"al_lifetime",
-        "fillna":null,
-        "encoding":null,
-        "type":null,
+        "column_name":"ALQ130",
+        "alias":"qs_alc_cnt_avg",
+        "fillna":0,
+        "encoding":"{'.':0, 99:None, 77:None, 999:None, 777:None}",
+        "type":"float",
         "encoding_names":null
        },
+
        {
         "id":"29",
         "table_name":"data/main_ALQ.csv",
         "column_name":"ALQ120Q",
-        "alias":"al_num_drinks",
+        "alias":"qs_alc_cnt_yr",
         "fillna":null,
-        "encoding":"{777:-1,999:-1}",
+        "encoding":"{777:None, 999:None, '.':None}",
         "type":"float",
         "encoding_names":null
-       }
+       },
+       {
+        "id":"53",
+        "table_name":"data/main_ALQ.csv",
+        "column_name":"ALQ140Q",
+        "alias":"qs_alc_nday_5p_old",
+        "fillna":null,
+        "encoding":"{777:None, 999:None, '.':None, 9999:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"54",
+        "table_name":"data/main_ALQ.csv",
+        "column_name":"ALQ141Q",
+        "alias":"qs_alc_nday_5p_new",
+        "fillna":null,
+        "encoding":"{777:None, 999:None, '.':None, 9999:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"55",
+        "table_name":"data/main_ALQ.csv",
+        "column_name":"ALQ150",
+        "alias":"qs_alc_nday_5p_life_old",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"56",
+        "table_name":"data/main_ALQ.csv",
+        "column_name":"ALQ151",
+        "alias":"qs_alc_nday_5p_life_new",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+
+
+
+       {
+        "id":"57",
+        "table_name":"data/main_AUQ.csv",
+        "column_name":"AUQ130",
+        "alias":"qs_hear_gen_old",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"58",
+        "table_name":"data/main_AUQ.csv",
+        "column_name":"AUQ131",
+        "alias":"qs_hear_gen_med",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:1, 3:2, 4:3, 5:3, 6:4}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"59",
+        "table_name":"data/main_AUQ.csv",
+        "column_name":"AUQ054",
+        "alias":"qs_hear_gen_new",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:1, 3:2, 4:3, 5:3, 6:4, 99:None}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"60",
+        "table_name":"data/main_AUQ.csv",
+        "column_name":"AUQ210",
+        "alias":"qs_hear_gun_old",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"61",
+        "table_name":"data/main_AUQ.csv",
+        "column_name":"AUQ211",
+        "alias":"qs_hear_gun_med",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"62",
+        "table_name":"data/main_AUQ.csv",
+        "column_name":"AUQ300",
+        "alias":"qs_hear_gun_new",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+
+       {
+        "id":"63",
+        "table_name":"data/main_BPQ.csv",
+        "column_name":"BPQ020",
+        "alias":"qs_bpch_bp",
+        "fillna":null,
+        "encoding":"{7:None, 9:None, '.':None, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"64",
+        "table_name":"data/main_BPQ.csv",
+        "column_name":"BPQ040A",
+        "alias":"qs_bpch_bp_rx",
+        "fillna":0,
+        "encoding":"{7:None, 9:None, '.':0, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"65",
+        "table_name":"data/main_BPQ.csv",
+        "column_name":"BPQ080",
+        "alias":"qs_bpch_chol",
+        "fillna":-1,
+        "encoding":"{7:None, 9:None, '.':-1, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+       {
+        "id":"66",
+        "table_name":"data/main_BPQ.csv",
+        "column_name":"BPQ090D",
+        "alias":"qs_bpch_chol_rx",
+        "fillna":-1,
+        "encoding":"{7:None, 9:None, '.':-1, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+
+       {
+        "id":"67",
+        "table_name":"data/main_HSQ.csv",
+        "column_name":"HSQ590",
+        "alias":"qs_hiv_tst",
+        "fillna":-1,
+        "encoding":"{7:None, 9:None, '.':-1, 2:0}",
+        "type":"float",
+        "encoding_names":null
+       },
+
+       {
+         "id":"70",
+         "table_name":"data/main_DEQ.csv",
+         "column_name":"DEQ030",
+         "alias":"qs_drm_sun_resp_old",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"71",
+         "table_name":"data/main_DEQ.csv",
+         "column_name":"DED031",
+         "alias":"qs_drm_sun_resp_new",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"72",
+         "table_name":"data/main_DEQ.csv",
+         "column_name":"DEQ010",
+         "alias":"qs_drm_moles_old",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"73",
+         "table_name":"data/main_DEQ.csv",
+         "column_name":"DED011",
+         "alias":"qs_drm_moles_new",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"74",
+         "table_name":"data/main_DIQ.csv",
+         "column_name":"DIQ010",
+         "alias":"qs_diab",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"75",
+         "table_name":"data/main_DIQ.csv",
+         "column_name":"DIQ010",
+         "alias":"qs_diab_ins",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"76",
+         "table_name":"data/main_DUQ.csv",
+         "column_name":"DUQ100",
+         "alias":"qs_drugs_old",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"77",
+         "table_name":"data/main_DUQ.csv",
+         "column_name":"DUQ240",
+         "alias":"qs_drugs_new",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"78",
+         "table_name":"data/main_HIQ.csv",
+         "column_name":"HID010",
+         "alias":"qs_health_ins_old",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"79",
+         "table_name":"data/main_HIQ.csv",
+         "column_name":"HIQ011",
+         "alias":"qs_health_ins_new",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"80",
+         "table_name":"data/main_HUQ.csv",
+         "column_name":"HUQ010",
+         "alias":"qs_health_opin",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"81",
+         "table_name":"data/main_HUQ.csv",
+         "column_name":"HUQ050",
+         "alias":"qs_health_ntimes_old",
+         "fillna":null,
+         "encoding":"{7:None, 9:None, '.':None, 77:None, 99:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"82",
+         "table_name":"data/main_HUQ.csv",
+         "column_name":"HUQ051",
+         "alias":"qs_health_ntimes_new",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 77:None, 99:None, 4:3, 5:3, 6:4, 7:5, 8:5}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"83",
+         "table_name":"data/main_KIQ.csv",
+         "column_name":"KIQ020",
+         "alias":"qs_kidney_old",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"84",
+         "table_name":"data/main_KIQ_U.csv",
+         "column_name":"KIQ022",
+         "alias":"qs_kidney_new",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 77:None, 99:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+
+
+
+        {
+         "id":"85",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ010",
+         "alias":"qs_mc_asthma",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"86",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ092",
+         "alias":"qs_mc_bld_tx",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"87",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCD093",
+         "alias":"qs_mc_bld_tx_yr",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"88",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160A",
+         "alias":"qs_mc_arth",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"89",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160B",
+         "alias":"qs_mc_hrt_fl",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"90",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160C",
+         "alias":"qs_mc_hrt_dis",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"91",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160D",
+         "alias":"qs_mc_angina",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"92",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160E",
+         "alias":"qs_mc_hrt_attk",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"93",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160F",
+         "alias":"qs_mc_stroke",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"94",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160G",
+         "alias":"qs_mc_emphysema",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"95",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160K",
+         "alias":"qs_mc_chr_bronch",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"96",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ160L",
+         "alias":"qs_mc_liver",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"97",
+         "table_name":"data/main_MCQ.csv",
+         "column_name":"MCQ220",
+         "alias":"qs_mc_cancer",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"98",
+         "table_name":"data/main_OHQ.csv",
+         "column_name":"OHQ030",
+         "alias":"qs_dent_last_vis",
+         "fillna":null,
+         "encoding":"{99:None, '.':None, 77:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"99",
+         "table_name":"data/main_SMQ.csv",
+         "column_name":"SMQ020",
+         "alias":"qs_sm_cig_100_life",
+         "fillna":null,
+         "encoding":"{9:None, '.':None, 7:None, 2:0}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"100",
+         "table_name":"data/main_SMQ.csv",
+         "column_name":"SMD030",
+         "alias":"qs_sm_cig_age_start",
+         "fillna":0,
+         "encoding":"{999:None, '.':0, 777:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"101",
+         "table_name":"data/main_SMQ.csv",
+         "column_name":"SMQ040",
+         "alias":"qs_sm_cig_now",
+         "fillna":0,
+         "encoding":"{9:None, '.':0, 7:None}",
+         "type":"float",
+         "encoding_names":null
+        },
+
+
+
+        {
+         "id":"106",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSGTSI",
+         "alias":"lab_ggt_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"107",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSGTSI",
+         "alias":"lab_ggt_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"108",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSGTSI",
+         "alias":"lab_ggt_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+
+        {
+         "id":"109",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSATSI",
+         "alias":"lab_ast_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"110",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSATSI",
+         "alias":"lab_ast_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"111",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSATSI",
+         "alias":"lab_ast_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+
+        {
+         "id":"112",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSASSI",
+         "alias":"lab_alt_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"113",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSASSI",
+         "alias":"lab_alt_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"114",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSASSI",
+         "alias":"lab_alt_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"115",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSGL",
+         "alias":"lab_glucose_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"116",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSGL",
+         "alias":"lab_glucose_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"117",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSGL",
+         "alias":"lab_glucose_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"118",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSCH",
+         "alias":"lab_chol_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"119",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSCH",
+         "alias":"lab_chol_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"120",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSCH",
+         "alias":"lab_chol_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"121",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSTR",
+         "alias":"lab_triglyc_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"122",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSTR",
+         "alias":"lab_triglyc_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"123",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSTR",
+         "alias":"lab_triglyc_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"124",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSNASI",
+         "alias":"lab_sodium_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"125",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSNASI",
+         "alias":"lab_sodium_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"126",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSNASI",
+         "alias":"lab_sodium_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"127",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSTP",
+         "alias":"lab_protein_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"128",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSTP",
+         "alias":"lab_protein_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"129",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSTP",
+         "alias":"lab_protein_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"130",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSC3SI",
+         "alias":"lab_bicarb_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"131",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSC3SI",
+         "alias":"lab_bicarb_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"132",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSC3SI",
+         "alias":"lab_bicarb_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"133",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSUA",
+         "alias":"lab_uric_acid_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"134",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBXSUA",
+         "alias":"lab_uric_acid_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"135",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSUA",
+         "alias":"lab_uric_acid_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"136",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSPH",
+         "alias":"lab_phosphorus_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"137",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBDSPH",
+         "alias":"lab_phosphorus_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"138",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSPH",
+         "alias":"lab_phosphorus_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+
+        {
+         "id":"139",
+         "table_name":"data/main_LAB18.csv",
+         "column_name":"LBXSLDSI",
+         "alias":"lab_ldh_old",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"140",
+         "table_name":"data/main_L40.csv",
+         "column_name":"LBDSLDSI",
+         "alias":"lab_ldh_med",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        },
+        {
+         "id":"141",
+         "table_name":"data/main_BIOPRO.csv",
+         "column_name":"LBXSLDSI",
+         "alias":"lab_ldh_new",
+         "fillna":null,
+         "encoding":null,
+         "type":"float",
+         "encoding_names":null
+        }
+
+
     ]
  }
