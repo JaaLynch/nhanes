@@ -1,3 +1,4 @@
+from this import d
 from tracemalloc import stop
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -15,6 +16,7 @@ from sklearn.model_selection import train_test_split
 import xgboost, shap
 from lifelines.utils import concordance_index
 import re
+from matplotlib import cm
 
 def plot_hist(df, plot_col, figsize=(10,4), hue=None, multiple='dodge'):
     fig = plt.figure(figsize=figsize)
@@ -87,20 +89,16 @@ def create_filter_widgets(cols, key='test'):
         )
     return filter_col, filt_low, filt_high
 
-def age_race_filters(df):
+def age_race_filters(key):
         col1, col2 = st.columns(2)
         with col1:
-            pir_low = st.slider("Poverty to Income Ratio Min:", 0, 5, value=0, step=1)
+            pir_low = st.slider("Poverty to Income Ratio Min:", 0, 5, value=0, step=1,key=key+'0')
             eth_low = st.slider("Race/Ethnicity Min:", 0, 5, value=0, step=1)   
         with col2:
-            pir_high = st.slider("Poverty to Income Ratio Max: ", 0, 5, value=5, step=1)
+            pir_high = st.slider("Poverty to Income Ratio Max: ", 0, 5, value=5, step=1, key=key+'1')
             eth_high = st.slider("Race/Ethnicity Max: ", 0, 5, value=5, step=1)
-        
-        df = df[(df['pir']>=pir_low) & (df['pir']<=pir_high)]
-        df = df[(df['race']>=eth_low) & (df['race']<=eth_high)]
-        return df
 
-
+        return pir_low, pir_high, eth_low, eth_high
 
 ## -----------------
 st.title('NHANES Modeling Dashboard')
@@ -751,26 +749,50 @@ st.text("C-Index: "+str(round(1-c_index,4)))
 
 if st.checkbox('Risk Score Distribution'):
     df = pd.read_pickle(model_df_file)
-    df = age_race_filters(df)
+    pir_low, pir_high, eth_low, eth_high = age_race_filters('risk_score_dist')
+    df = df[(df['pir']>=pir_low) & (df['pir']<=pir_high)]
+    df = df[(df['race']>=eth_low) & (df['race']<=eth_high)]
+
+    nplot = 1
+    if st.checkbox('Add second model'):
+        model_selected_2 = st.selectbox(
+            'Select a second model:',
+            tuple(model_names)
+        )
+        model_df_file_2 = 'model/model_df_' + model_selected_2 + '.p'
+        df2 = pd.read_pickle(model_df_file_2)
+        df2 = df2[(df2['pir']>=pir_low) & (df2['pir']<=pir_high)]
+        df2 = df2[(df2['race']>=eth_low) & (df2['race']<=eth_high)]
+        nplot=2
 
     cols = df.columns
     if st.checkbox('Apply filter to population'):
         filter_col, filt_low, filt_high = create_filter_widgets(cols, key='risk_score_dist')
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
+        if nplot==2:
+            df2 = df2[(df2[filter_col]>=filt_low) & (df2[filter_col]<=filt_high)]
 
-    def plot_risk_score(df, figsize=(10,6)):
+    def plot_risk_score(df_list, figsize=(10,6),nplot=1):
         fig = plt.figure(figsize=figsize)
-        ax = sns.kdeplot(data=df, x="risk_score")
-        mean = round(df["risk_score"].mean(),3)
-        median = round(df["risk_score"].median(),3)
-        #plt.axvline(x=mean, c='black')
-        plt.axvline(x=median, c='grey')
+        median = round(df_list[0]["risk_score"].median(),3)
+        ax = sns.kdeplot(data=df_list[0], x="risk_score", linestyle='-')
+        plt.axvline(x=median, c='grey',linestyle='-')
+        if nplot>1:
+            median2 = round(df_list[1]["risk_score"].median(),3)
+            ax = sns.kdeplot(data=df_list[1], x="risk_score", linestyle='--')
+            plt.axvline(x=median2, c='grey', linestyle='--')
+        
         ax.set_xlim(-0.2,1.2)
         st.pyplot(fig)
-        st.text("Mean Risk Score: "+ str(mean))
-        st.text("Median Risk Score (grey): "+ str(median))
+        st.text("Median - Model 1: "+ str(median))
+        if nplot>1: 
+            st.text("Median - Model 2: "+ str(median2))
+            st.text("Delta: "+str(round(median2-median,3)))
     
-    plot_risk_score(df)
+    if nplot == 1:
+        plot_risk_score([df], nplot=1)
+    else:
+        plot_risk_score([df, df2], nplot=2)
 
 if st.checkbox('Actual To Expected by Risk Score Group'):
     df = pd.read_pickle(model_df_file)
@@ -937,3 +959,67 @@ if st.checkbox('SHAP Dependency'):
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
         
     plot_dependence(df, col, col_2)
+
+# ----
+st.subheader('Model and Population Compare')
+
+model_dfs = glob.glob('model/model_df_*.p')
+model_names = [model_df.replace('model/model_df_','').replace('.p','') for model_df in model_dfs]
+
+col1, col2 = st.columns(2)
+
+with col1:
+    model_name_1 = st.selectbox('Model 1: ', tuple(model_names), index=0)
+    
+with col2:
+    model_name_2 = st.selectbox('Model 2: ', tuple(model_names), index=1)
+
+model_df_1 = 'model/model_df_' + model_name_1 + '.p'
+model_df_2 = 'model/model_df_' + model_name_2 + '.p'
+
+if st.checkbox('Risk Score Comparison'):
+
+    bins = st.slider('Bin size: ',1,20,10)
+    col1, col2 = st.columns(2)
+    with col1:
+        tilt = st.slider('Tilt figure: ', -30, 30, 0, 5)
+    with col2:
+        spin = st.slider('Spin the figure', -180, 180, 0, 5)
+
+    df1 = pd.read_pickle(model_df_1)
+    df2 = pd.read_pickle(model_df_2)
+
+    xAmplitudes = df1['risk_score'] #your data here
+    yAmplitudes = df2['risk_score']#your other data here
+
+    x = np.array(xAmplitudes)   #turn x,y data into numpy arrays
+    y = np.array(yAmplitudes)
+
+    fig = plt.figure(figsize=(10,10))          #create a canvas, tell matplotlib it's 3d
+    ax = fig.add_subplot(111, projection='3d')
+
+    #make histogram stuff - set bins - I choose 20x20 because I have a lot of data
+    hist, xedges, yedges = np.histogram2d(x, y, bins=(bins, bins))
+    xpos, ypos = np.meshgrid(xedges[:-1]+xedges[1:], yedges[:-1]+yedges[1:])
+
+    xpos = xpos.flatten()/2.
+    ypos = ypos.flatten()/2.
+    zpos = np.zeros_like (xpos)
+
+    dx = xedges [1] - xedges [0]
+    dy = yedges [1] - yedges [0]
+    dz = hist.flatten()
+
+    cmap = cm.get_cmap('jet') # Get desired colormap - you can change this!
+    max_height = np.max(dz)   # get range of colorbars so we can normalize
+    min_height = np.min(dz)
+    # scale each z to [0,1], and get their rgb values
+    rgba = [cmap((k-min_height)/max_height) for k in dz] 
+
+    ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=rgba, zsort='average')
+    ax.view_init(30+tilt,-110+spin)
+    plt.title("3D Histogram of Model Risk Scores \n Bivariate Distribution")
+    plt.xlabel(model_name_1)
+    plt.ylabel(model_name_2)
+    #plt.savefig("Your_title_goes_here")
+    st.pyplot(fig)
