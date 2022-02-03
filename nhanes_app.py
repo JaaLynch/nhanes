@@ -17,6 +17,7 @@ import xgboost, shap
 from lifelines.utils import concordance_index
 import re
 from matplotlib import cm
+import random
 
 def plot_hist(df, plot_col, figsize=(10,4), hue=None, multiple='dodge'):
     fig = plt.figure(figsize=figsize)
@@ -99,6 +100,53 @@ def age_race_filters(key):
             eth_high = st.slider("Race/Ethnicity Max: ", 0, 5, value=5, step=1)
 
         return pir_low, pir_high, eth_low, eth_high
+
+def calc_c_index(df, exposure_col = 'exposure_months', death_col = 'death', pred_col = 'pred', train_test_col='train_test', features=['age','gender']):
+    c_index = 1-concordance_index(df[exposure_col], df[pred_col], df[death_col])
+    deaths = df['death'].sum()
+    
+    df_in = df[df[train_test_col] == 'Train']
+    df_out = df[df[train_test_col] == 'Test']
+    c_index_in = 1-concordance_index(df_in[exposure_col], df_in[pred_col], df_in[death_col])
+    c_index_out = 1-concordance_index(df_out[exposure_col], df_out[pred_col], df_out[death_col])
+    deaths_in = df_in['death'].sum()
+    deaths_out =  df_out['death'].sum()
+    
+    count_in = df_in.shape[0] 
+    count_out = df_out.shape[0]
+    count = df.shape[0]
+
+    count_in = df_in.shape[0] 
+    count_out = df_out.shape[0]
+    count = df.shape[0]
+
+    null_count_in = df_in[df_in[features].isna().replace([True,False], [0, 1]).product(axis=1).replace({0:True, 1:False})].shape[0] 
+    null_count_out = df_out[df_out[features].isna().replace([True,False], [0, 1]).product(axis=1).replace({0:True, 1:False})].shape[0]
+    null_count = df[df[features].isna().replace([True,False], [0, 1]).product(axis=1).replace({0:True, 1:False})].shape[0]
+
+    null_deaths = df[df[features].isna().replace([True,False], [0, 1]).product(axis=1).replace({0:True, 1:False})]['death'].sum()
+    null_deaths_in = df_in[df_in[features].isna().replace([True,False], [0, 1]).product(axis=1).replace({0:True, 1:False})]['death'].sum()
+    null_deaths_out = df_out[df_out[features].isna().replace([True,False], [0, 1]).product(axis=1).replace({0:True, 1:False})]['death'].sum()
+
+    tmp = pd.DataFrame(
+        [
+            ["Train", round(c_index_in*100,1), count_in, deaths_in, null_count_in, null_deaths_in],
+            ["Test", round(c_index_out*100,1), count_out, deaths_out, null_count_out, null_deaths_out],
+            ["Total", round(c_index*100,1), count, deaths, null_count, null_deaths]
+        ], columns=['Sample','C-Index','Count', 'Deaths','Null Count', 'Null Deaths'])
+    st.dataframe(tmp)
+
+def create_sample_df(df, wt_col='wt_mec', k=1000):
+    population = df['id'].to_list()
+    weights = df[wt_col].to_list()
+    id_sample = random.choices(
+        population = population,
+        weights = weights,
+        k=k
+    )
+    id_sample = pd.DataFrame(id_sample, columns=['id'])
+    df = pd.merge(id_sample, df, on='id', how='left')
+    return df
 
 ## -----------------
 st.title('NHANES Modeling Dashboard')
@@ -447,111 +495,131 @@ st.text('Edit features.json to customize available data fields')
 
 if st.checkbox('Check to create modeling data'):
 
-    write_state = st.text('Creating data/modeling.p...')
+    start = st.button('Create')
+    if start:
 
-    with open('features.json', 'r') as f:
-        feature_meta = json.load(f)
-    
-    df = create_modeling_data(feature_meta)
+        write_state = st.text('Creating data/modeling.p...')
 
-    # Population Filter
-    df = df[df['mort_elig']==1]
+        with open('features.json', 'r') as f:
+            feature_meta = json.load(f)
+        
+        df = create_modeling_data(feature_meta)
 
-    # Replace with more robust create features function
-    df['bp_sys_ave'] = df[['BPXSY1','BPXSY2', 'BPXSY3','BPXSY4']].mean(axis=1)
-    df['exposure_months'] = df['exposure_months'].replace({'.':0}).fillna(0).astype('int')
-    df['duration'] = (df['exposure_months'].fillna(0)/12).astype(int)+1
-    df['mort_elig'] = df['mort_elig'].astype(int)
-    df['death'] = df['death'].astype(int)
-    df['pir'] = df['pir'].round(1)
-    df['pir_bin'] = df['pir'].round(0)
-    
-    bins = [0,10,20,30,40,50,60,70,80,90,100]
-    labels = ["00-09","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80-89","90-99"]
-    df['age_band_10'] = pd.cut(df['age'], bins, labels=labels, include_lowest=True, right=False)
-    df['age_band_10_values'] = pd.cut(df['age'], bins, labels=bins[:-1], include_lowest=True, right=False).fillna(0).astype(int)
+        # Population Filter
+        df = df[df['mort_elig']==1]
+        df = df[df['age']>18]
 
-    bins = [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
-    labels = [
-        "00-04","05-09","10-14","15-19","20-24","25-29",
-        "30-34","35-39","40-44","45-49","50-54","55-59",
-        "60-64","65-69","70-74","75-79","80-84","85-89","90-94","95-99"
-    ]
-    df['age_band_5'] = pd.cut(df['age'], bins, labels = labels, include_lowest = True, right=False)
-    df['age_band_5_values'] = pd.cut(df['age'], bins, labels = bins[:-1], include_lowest = True, right=False).fillna(0).astype(int)
+        # Replace with more robust create features function
+        df['bp_sys_ave'] = df[['BPXSY1','BPXSY2', 'BPXSY3','BPXSY4']].mean(axis=1)
+        df['exposure_months'] = df['exposure_months'].replace({'.':0}).fillna(0).astype('int')
+        df['duration'] = (df['exposure_months'].fillna(0)/12).astype(int)+1
+        df['mort_elig'] = df['mort_elig'].astype(int)
+        df['death'] = df['death'].astype(int)
+        df['pir'] = df['pir'].round(1)
+        df['pir_bin'] = df['pir'].round(0)
+        
+        bins = [0,10,20,30,40,50,60,70,80,90,100]
+        labels = ["00-09","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80-89","90-99"]
+        df['age_band_10'] = pd.cut(df['age'], bins, labels=labels, include_lowest=True, right=False)
+        df['age_band_10_values'] = pd.cut(df['age'], bins, labels=bins[:-1], include_lowest=True, right=False).fillna(0).astype(int)
 
-    df['cohort_5'] = df['gender_values'].astype('str')+"-"+df['age_band_5'].astype('str')
-    df['cohort_10'] = df['gender_values'].astype('str')+"-"+df['age_band_10'].astype('str')
-    
-    df['ex_vis_gl'] = df[['ex_vis_gl_n', 'ex_vis_gl_f']].max(axis=1)
-    df['ex_vis_ac'] = df[['ex_vis_ac_r','ex_vis_ac_l']].max(axis=1)
-    df['ex_vis_ker_cyl'] = df[['ex_vis_ker_cyl_r','ex_vis_ker_cyl_l']].max(axis=1)
-    df['ex_vis_ker_rad'] = df[['ex_vis_ker_rad_r','ex_vis_ker_rad_l']].max(axis=1)
-    df['ex_vis_ker_axs'] = df[['ex_vis_ker_axs_r','ex_vis_ker_axs_l']].max(axis=1)
-    df['ex_vis_ker_pow'] = df[['ex_vis_ker_pow_r','ex_vis_ker_pow_l']].max(axis=1)
-    df['ex_vis_axs'] = df[['ex_vis_axs_r','ex_vis_axs_l']].max(axis=1)
-    df['ex_vis_cyl'] = df[['ex_vis_cyl_r','ex_vis_cyl_l']].max(axis=1)
-    df['ex_vis_sph'] = df[['ex_vis_sph_r','ex_vis_sph_l']].max(axis=1)
+        bins = [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
+        labels = [
+            "00-04","05-09","10-14","15-19","20-24","25-29",
+            "30-34","35-39","40-44","45-49","50-54","55-59",
+            "60-64","65-69","70-74","75-79","80-84","85-89","90-94","95-99"
+        ]
+        df['age_band_5'] = pd.cut(df['age'], bins, labels = labels, include_lowest = True, right=False)
+        df['age_band_5_values'] = pd.cut(df['age'], bins, labels = bins[:-1], include_lowest = True, right=False).fillna(0).astype(int)
 
-    df['bmi_calc'] = df['ex_ht'] / (df['ex_wt'] ** 2)
+        df['cohort_5'] = df['gender_values'].astype('str')+"-"+df['age_band_5'].astype('str')
+        df['cohort_10'] = df['gender_values'].astype('str')+"-"+df['age_band_10'].astype('str')
+        
+        #Sphere: The sphere (SPH) on your prescription indicates the lens power you need to see clearly. 
+        #  A minus (-) symbol next to this number means you’re nearsighted, and a plus (+) symbol means 
+        #  the prescription is meant to correct farsightedness.
+        #Cylinder: The cylinder (CYL) number indicates the lens power needed to correct astigmatism. 
+        #  If this column is blank, it means you don’t have an astigmatism.
+        #Axis: An axis number will also be included if you have an astigmatism. 
+        #  This number shows the angle of the lens that shouldn’t feature a cylinder power to correct your astigmatism.
 
-    df['qs_alc_cnt_avg'] = np.where(df['qs_alc_cnt_avg']>36, 36, df['qs_alc_cnt_avg'])
-    df['qs_alc_nday_5p']=np.where(df['qs_alc_nday_5p_new'].isnull(),df['qs_alc_nday_5p_old'],df['qs_alc_nday_5p_new'])
-    df['qs_alc_nday_5p_life']=np.where(df['qs_alc_nday_5p_life_new'].isnull(),df['qs_alc_nday_5p_life_old'],df['qs_alc_nday_5p_life_new'])
-    
-    df['qs_hear_gen'] = np.where(df['qs_hear_gen_new'].isnull(),df['qs_hear_gen_med'],df['qs_hear_gen_new'])
-    df['qs_hear_gen'] = np.where(df['qs_hear_gen'].isnull(),df['qs_hear_gen_old'],df['qs_hear_gen'])
+        df['ex_vis_gl'] = df[['ex_vis_gl_n', 'ex_vis_gl_f']].max(axis=1)
+        df['ex_vis_ac'] = df[['ex_vis_ac_r','ex_vis_ac_l']].max(axis=1)
+        df['ex_vis_ker_cyl'] = df[['ex_vis_ker_cyl_r','ex_vis_ker_cyl_l']].max(axis=1)
+        df['ex_vis_ker_rad'] = df[['ex_vis_ker_rad_r','ex_vis_ker_rad_l']].max(axis=1)
+        df['ex_vis_ker_axs'] = df[['ex_vis_ker_axs_r','ex_vis_ker_axs_l']].max(axis=1)
+        df['ex_vis_ker_pow'] = df[['ex_vis_ker_pow_r','ex_vis_ker_pow_l']].max(axis=1)
+        df['ex_vis_axs'] = df[['ex_vis_axs_r','ex_vis_axs_l']].max(axis=1)
+        
+        df['ex_vis_cyl'] = df[['ex_vis_cyl_r','ex_vis_cyl_l']].sum(axis=1)
+        
+        df['ex_vis_sph_min'] = df[['ex_vis_sph_r','ex_vis_sph_l']].min(axis=1)
+        df['ex_vis_sph_max'] = df[['ex_vis_sph_r','ex_vis_sph_l']].max(axis=1)
 
-    df['qs_hear_gun'] = np.where(df['qs_hear_gun_new'].isnull(),df['qs_hear_gun_med'],df['qs_hear_gun_new'])
-    df['qs_hear_gun'] = np.where(df['qs_hear_gun'].isnull(),df['qs_hear_gun_old'],df['qs_hear_gun'])
+        df['ex_armc_to_arml'] = df['ex_armc'] / (df['ex_arml'])
+        df['ex_leg_to_ht'] = df['ex_leg'] / df['ex_ht']
+        df['ex_bmi_calc'] = df['ex_ht'] / (df['ex_wt'] ** 2)
 
-    df['qs_drm_sun_resp'] = np.where(df['qs_drm_sun_resp_new'].isna(),df['qs_drm_sun_resp_old'],df['qs_drm_sun_resp_new'])
-    df['qs_drm_sun_resp'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drm_sun_resp'], np.nan)
+        df['qs_alc_cnt_avg'] = np.where(df['qs_alc_cnt_avg']>36, 36, df['qs_alc_cnt_avg'])
+        df['qs_alc_nday_5p']=np.where(df['qs_alc_nday_5p_new'].isnull(),df['qs_alc_nday_5p_old'],df['qs_alc_nday_5p_new'])
+        df['qs_alc_nday_5p_life']=np.where(df['qs_alc_nday_5p_life_new'].isnull(),df['qs_alc_nday_5p_life_old'],df['qs_alc_nday_5p_life_new'])
+        
+        df['qs_hear_gen'] = np.where(df['qs_hear_gen_new'].isnull(),df['qs_hear_gen_med'],df['qs_hear_gen_new'])
+        df['qs_hear_gen'] = np.where(df['qs_hear_gen'].isnull(),df['qs_hear_gen_old'],df['qs_hear_gen'])
 
-    df['qs_drm_moles'] = np.where(df['qs_drm_moles_new'].isna(),df['qs_drm_moles_old'],df['qs_drm_moles_new'])
-    df['qs_drm_moles'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drm_moles'], np.nan)
+        df['qs_hear_gun'] = np.where(df['qs_hear_gun_new'].isnull(),df['qs_hear_gun_med'],df['qs_hear_gun_new'])
+        df['qs_hear_gun'] = np.where(df['qs_hear_gun'].isnull(),df['qs_hear_gun_old'],df['qs_hear_gun'])
 
-    df['qs_drugs'] = np.where(df['qs_drugs_new'].isna(),df['qs_drugs_old'],df['qs_drugs_new'])
-    df['qs_drugs'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drugs'], np.nan)
+        df['qs_drm_sun_resp'] = np.where(df['qs_drm_sun_resp_new'].isna(),df['qs_drm_sun_resp_old'],df['qs_drm_sun_resp_new'])
+        df['qs_drm_sun_resp'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drm_sun_resp'], np.nan)
 
-    df['qs_health_ins'] = np.where(df['qs_health_ins_new'].isna(),df['qs_health_ins_old'],df['qs_health_ins_new'])
-    df['qs_health_ntimes'] = np.where(df['qs_health_ntimes_new'].isna(),df['qs_health_ntimes_old'],df['qs_health_ntimes_new'])
+        df['qs_drm_moles'] = np.where(df['qs_drm_moles_new'].isna(),df['qs_drm_moles_old'],df['qs_drm_moles_new'])
+        df['qs_drm_moles'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drm_moles'], np.nan)
 
-    df['qs_kidney'] = np.where(df['qs_kidney_new'].isna(),df['qs_kidney_old'],df['qs_kidney_new'])
+        df['qs_drugs'] = np.where(df['qs_drugs_new'].isna(),df['qs_drugs_old'],df['qs_drugs_new'])
+        df['qs_drugs'] = np.where((df['age']<60)&(df['age']>=20), df['qs_drugs'], np.nan)
 
-    df['qs_alc_any'] = np.where(df['qs_alc_any_new'].isna(),df['qs_alc_any_old'],df['qs_alc_any_new'])
+        df['qs_health_ins'] = np.where(df['qs_health_ins_new'].isna(),df['qs_health_ins_old'],df['qs_health_ins_new'])
+        df['qs_health_ntimes'] = np.where(df['qs_health_ntimes_new'].isna(),df['qs_health_ntimes_old'],df['qs_health_ntimes_new'])
 
-    df['qs_alc_any'] = np.where(df['qs_alc_any_new'].isnull(),df['qs_alc_any_med'],df['qs_alc_any_new'])
-    df['qs_alc_any'] = np.where(df['qs_alc_any'].isnull(),df['qs_alc_any_old'],df['qs_alc_any'])
+        df['qs_kidney'] = np.where(df['qs_kidney_new'].isna(),df['qs_kidney_old'],df['qs_kidney_new'])
 
-    df['lab_alt'] = df[['lab_alt_new','lab_alt_med','lab_alt_old']].sum(axis=1, min_count=1)
-    df['lab_ast'] = df[['lab_ast_new','lab_ast_med','lab_ast_old']].sum(axis=1, min_count=1)
-    df['lab_bicarb'] = df[['lab_bicarb_new','lab_bicarb_med','lab_bicarb_old']].sum(axis=1, min_count=1)
-    df['lab_chol'] = df[['lab_chol_new','lab_chol_med','lab_chol_old']].sum(axis=1, min_count=1)
-    df['lab_ggt'] = df[['lab_ggt_new','lab_ggt_med','lab_ggt_old']].sum(axis=1, min_count=1)
-    df['lab_glucose'] = df[['lab_glucose_new','lab_glucose_med','lab_glucose_old']].sum(axis=1, min_count=1)
-    df['lab_phosphorus'] = df[['lab_phosphorus_new','lab_phosphorus_med','lab_phosphorus_old']].sum(axis=1, min_count=1)
-    df['lab_protein'] = df[['lab_protein_new','lab_protein_med','lab_protein_old']].sum(axis=1, min_count=1)
-    df['lab_sodium'] = df[['lab_sodium_new','lab_sodium_med','lab_sodium_old']].sum(axis=1, min_count=1)
-    df['lab_triglyc'] = df[['lab_triglyc_new','lab_triglyc_med','lab_triglyc_old']].sum(axis=1, min_count=1)
-    df['lab_uric_acid'] = df[['lab_uric_acid_new','lab_uric_acid_med','lab_uric_acid_old']].sum(axis=1, min_count=1)
-    df['lab_ldh'] = df[['lab_ldh_new','lab_ldh_med','lab_ldh_old']].sum(axis=1, min_count=1)
-    
-    # Attach rx_script_count and rx_total_days, and by class
-    tmp = pd.read_csv('data/main_mort_rx.csv')
-    df = pd.merge(df,tmp, on='id', how='left')
-    df['rx_total_days'] = np.where(df['rx_total_days']>100000,100000,df['rx_total_days'])
-    tmp = pd.read_csv('data/main_mort_rx_class.csv')
-    df = pd.merge(df,tmp, on='id', how='left')
+        df['qs_alc_any'] = np.where(df['qs_alc_any_new'].isna(),df['qs_alc_any_old'],df['qs_alc_any_new'])
 
-    # End feature engineering
-    df = df.reset_index()
-    st.dataframe(df.head())
+        df['qs_alc_any'] = np.where(df['qs_alc_any_new'].isnull(),df['qs_alc_any_med'],df['qs_alc_any_new'])
+        df['qs_alc_any'] = np.where(df['qs_alc_any'].isnull(),df['qs_alc_any_old'],df['qs_alc_any'])
 
-    df.to_pickle('data/modeling.p')
-    write_state.text('Creating data/modeling.p...Done!')
-    st.text('Shape of df: '+ str(df.shape))
-    st.text('Number of deaths: '+ str(df.death.fillna(0).replace({".":0}).astype('str').astype('int').sum()))
+        df['lab_alt'] = df[['lab_alt_new','lab_alt_med','lab_alt_old']].sum(axis=1, min_count=1)
+        df['lab_ast'] = df[['lab_ast_new','lab_ast_med','lab_ast_old']].sum(axis=1, min_count=1)
+        df['lab_bicarb'] = df[['lab_bicarb_new','lab_bicarb_med','lab_bicarb_old']].sum(axis=1, min_count=1)
+        df['lab_chol'] = df[['lab_chol_new','lab_chol_med','lab_chol_old']].sum(axis=1, min_count=1)
+        df['lab_ggt'] = df[['lab_ggt_new','lab_ggt_med','lab_ggt_old']].sum(axis=1, min_count=1)
+        df['lab_glucose'] = df[['lab_glucose_new','lab_glucose_med','lab_glucose_old']].sum(axis=1, min_count=1)
+        df['lab_phosphorus'] = df[['lab_phosphorus_new','lab_phosphorus_med','lab_phosphorus_old']].sum(axis=1, min_count=1)
+        df['lab_protein'] = df[['lab_protein_new','lab_protein_med','lab_protein_old']].sum(axis=1, min_count=1)
+        df['lab_sodium'] = df[['lab_sodium_new','lab_sodium_med','lab_sodium_old']].sum(axis=1, min_count=1)
+        df['lab_triglyc'] = df[['lab_triglyc_new','lab_triglyc_med','lab_triglyc_old']].sum(axis=1, min_count=1)
+        df['lab_uric_acid'] = df[['lab_uric_acid_new','lab_uric_acid_med','lab_uric_acid_old']].sum(axis=1, min_count=1)
+        df['lab_ldh'] = df[['lab_ldh_new','lab_ldh_med','lab_ldh_old']].sum(axis=1, min_count=1)
+
+        df['qs_sm_years'] =  df[['age','qs_sm_cig_age_start']].max(axis=1) - df['qs_sm_cig_age_start']
+        
+        # Attach rx_script_count and rx_total_days, and by class
+        tmp = pd.read_csv('data/main_mort_rx.csv')
+        df = pd.merge(df,tmp, on='id', how='left')
+        df['rx_total_days'] = np.where(df['rx_total_days']>100000,100000,df['rx_total_days'])
+        tmp = pd.read_csv('data/main_mort_rx_class.csv')
+        df = pd.merge(df,tmp, on='id', how='left')
+
+        # End feature engineering
+        df = df.reset_index()
+
+        st.dataframe(df.head())
+
+        df.to_pickle('data/modeling.p')
+        write_state.text('Creating data/modeling.p...Done!')
+        st.text('Shape of df: '+ str(df.shape))
+        st.text('Number of deaths: '+ str(df.death.fillna(0).replace({".":0}).astype('str').astype('int').sum()))
 
 if st.checkbox('Check to explore modeling data'):
     df = pd.read_pickle('data/modeling.p')
@@ -612,55 +680,95 @@ if st.checkbox('Check to explore modeling data'):
     st.pyplot(fig)
 
 if st.checkbox('Check to create model'):
+
     text = st.text('Reading data...')
     df = pd.read_pickle('data/modeling.p')
     text.text('Reading data...Done!')
 
     # Population Filters
+    
     # None for now
-    if st.checkbox('Check to show parameters'):
-        with open('params.json', 'r') as f:
-            params = json.load(f)
-        st.json(params)
-    st.text('Edit params.json to customize model parameters')
+    #if st.checkbox('Check to show parameters'):
+    #    with open('params.json', 'r') as f:
+    #        params = json.load(f)
+    #    st.json(params)
+    #st.text('Edit params.json to customize model parameters')
 
     features = st.multiselect(
         'Select model features',
         sorted(df.columns),
-        default=['age','gender']
+        default=['age_band_10_values','gender']
     )
+
+    url = 'https://xgboost.readthedocs.io/en/stable/parameter.html'
+    st.markdown("[XGBoost Hyperparameter Documentation](%s)" % url)
 
     col1, col2 = st.columns(2)
     with col1:
-        model_name = st.text_input(
-                'Enter a name for your model: ' 
-        )
+        num_boost_round = st.slider('Number of training iterations:', min_value=0, max_value=10000, value=5000, step=100)
+        learning_rate = st.slider('Learning Rate x 10,000', 0, 100, value=10, step=1)
+        learning_rate = learning_rate / 10000
+        subsample = st.slider('XGB Subsample', 0.0, 1.0, 0.7, step=0.1)
+        min_child_weight = st.slider('Min Child Weight', 0, 200, 1, 1)
+        early_stop_rounds = st.slider('Early Stopping Rounds', 2, 8, 5, 1)
+        model_name = st.text_input('Enter a name for your model:')
+        if not model_name: model_name = 'blank'
         train_button = st.button('Train Model')
+
     with col2:
-        if not model_name:
-            model_name = 'blank'
-        num_boost_round = st.slider('Number of training iterations:', min_value=0, max_value=5000, step=100)
-        
+        wts = st.slider('Weighted Sample Size x 1,000', 0, 200, 0, step=20)
+        wts = wts * 1000
+        #if wts > 0: df = create_sample_df(df, wt_col='wt_mec', k=wts)  
+        max_depth = st.slider('Max Depth', 2, 10, 6, step=1)
+        gamma = st.slider('Gamma', 0, 100, 0, 1)
+        max_delta_step = st.slider('Max Delta Step', 0, 10, 0, 1)
+        shap_calc = st.select_slider('Calculate SHAP', tuple(['Yes','No']))
+
+    params = {
+        "eta":learning_rate,
+        "max_depth": max_depth,
+        "objective": "survival:cox",
+        "subsample": subsample,
+        "min_child_weight":min_child_weight,
+        "gamma": gamma,
+        "max_delta_step": max_delta_step
+    }       
 
     if train_button:
         my_bar = st.progress(0)
         text = st.text('Training...')
 
-        X = df[features]
+        X = df
         y = np.where(df['death']==1, df['exposure_months'], df['exposure_months']*-1)
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42)
+        test_size = 0.4
+        k = int(wts*(1-test_size))
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
-        xgb_full = xgboost.DMatrix(X, label=y)
-        xgb_train = xgboost.DMatrix(X_train, label=y_train)
-        xgb_test = xgboost.DMatrix(X_test, label=y_test)
+        if wts > 0: 
+            X_train = create_sample_df(X_train, wt_col='wt_mec', k=k)
+            X_test = create_sample_df(X_test, wt_col='wt_mec', k=wts-k) 
+            
+            y_train = np.where(X_train['death']==1, X_train['exposure_months'], X_train['exposure_months']*-1)
+            y_test = np.where(X_test['death']==1, X_test['exposure_months'], X_test['exposure_months']*-1) 
+
+            X = pd.concat([X_train, X_test]) 
+            y = np.concatenate((y_train, y_test))
+
+        df = X.reset_index()
+
+        xgb_full = xgboost.DMatrix(X[features], label=y)
+        xgb_train = xgboost.DMatrix(X_train[features], label=y_train)
+        xgb_test = xgboost.DMatrix(X_test[features], label=y_test)
+
+        df['train_test'] = np.where(df['id'].isin(X_test.id.unique()), 'Test', 'Train')
 
         def update_bar(env):
             percent_complete = round(env.iteration/num_boost_round,2)
             my_bar.progress(percent_complete)
 
-        with open('params.json', 'r') as f:
-            params = json.load(f)
+        #with open('params.json', 'r') as f:
+        #    params = json.load(f)
 
         model = xgboost.train(
             params, 
@@ -668,7 +776,7 @@ if st.checkbox('Check to create model'):
             num_boost_round = num_boost_round, 
             evals = [(xgb_test, "test")],
             verbose_eval=100,
-            early_stopping_rounds=5,
+            early_stopping_rounds=early_stop_rounds,
             callbacks = [update_bar]
         )
         my_bar.progress(100)
@@ -676,22 +784,22 @@ if st.checkbox('Check to create model'):
         
         st.text("Best Iteration: "+str(model.best_iteration))
 
-        c_index = concordance_index(df['exposure_months'], model.predict(xgb_full), df['death'])
-        st.text("C-Index: "+str(round(1-c_index,5)))
-
-        text = st.text("Calculating shap values...")
-        cols=[feature+'_shap' for feature in features]
-        shap_values = shap.TreeExplainer(model).shap_values(X)
-        shap_values = pd.DataFrame(shap_values, columns=cols)
-
-        df = pd.concat([df, shap_values], axis=1)
-        text.text("Calculating shap values...Done!")
-
         df['pred'] = model.predict(xgb_full)
         df['pred_pct'] = df.pred.rank(pct=True)
         df['pred_pct_cohort_5'] = df.groupby("cohort_5")["pred"].rank(pct=True)
         df['pred_pct_cohort_10'] = df.groupby("cohort_10")["pred"].rank(pct=True)
         df['risk_score'] = df['pred_pct_cohort_10']
+        
+        calc_c_index(df, features=features)
+
+        if shap_calc == "Yes":
+            text = st.text("Calculating shap values...")
+            cols=[feature+'_shap' for feature in features]
+            shap_values = shap.TreeExplainer(model).shap_values(X[features])
+            shap_values = pd.DataFrame(shap_values, columns=cols)
+
+            df = pd.concat([df, shap_values], axis=1)
+            text.text("Calculating shap values...Done!")
 
         file = 'expected_tables/2015-vbt-unismoke-alb-anb.xlsx'
         df_m_2015 = pd.read_excel(file, sheet_name = '2015 Male Unismoke ANB', skiprows=2)
@@ -735,6 +843,7 @@ st.subheader('Model Understanding and Evaluation')
 model_files = glob.glob('model/model_*.json')
 model_df_files = glob.glob('model/model_df*.p')
 model_names = [file.replace('model/model_','').replace('.json','') for file in model_files]
+model_names = sorted(model_names)
 model_selected = st.selectbox(
     'Select a model:',
     tuple(model_names)
@@ -744,8 +853,10 @@ if not model_selected:
 model_file = 'model/model_' + model_selected + '.json'
 model_df_file = 'model/model_df_' + model_selected + '.p'
 
-c_index = c_index_on_df(model_df_file)
-st.text("C-Index: "+str(round(1-c_index,4)))
+if st.button('C-Index'):
+    df = pd.read_pickle(model_df_file)
+    features = [col.replace('_shap','') for col in df.columns if "_shap" in col]
+    calc_c_index(df, features=features)
 
 if st.checkbox('Risk Score Distribution'):
     df = pd.read_pickle(model_df_file)
@@ -798,12 +909,31 @@ if st.checkbox('Actual To Expected by Risk Score Group'):
     df = pd.read_pickle(model_df_file)
     df['All cohorts'] = 1
     cols = df.columns
+
+    model_dfs = glob.glob('model/model_df_*.p')
+    model_names = [model_df.replace('model/model_df_','').replace('.p','') for model_df in model_dfs]
+    model_names = sorted(model_names)
+    nplot = 1
+    if st.checkbox('Compare to another model'):
+        model_selected_2 = st.selectbox(
+            'Select the second model:',
+            tuple(model_names)
+        )
+        model_df_file_2 = 'model/model_df_' + model_selected_2 + '.p'
+        df2 = pd.read_pickle(model_df_file_2)
+        nplot=2
     
-    hue = st.selectbox(
-        'Select variable used to color bars',
-        tuple(['All cohorts','gender','age_band_5','age_band_10','cohort_5','cohort_10','pir_bin','race' ])
-    )
-    
+    if nplot==1:
+        hue = st.selectbox(
+            'Select variable used to color bars',
+            tuple(['All cohorts','train_test', 'gender','age_band_5','age_band_10','cohort_5','cohort_10','pir_bin','race' ])
+        )
+    else:
+        hue = 'model_name'
+        df['model_name'] = model_selected
+        df2['model_name']= model_selected_2
+        df = pd.concat([df,df2], axis=0)
+
     if st.checkbox('Apply filter to actual to expected chart'):
         filter_col, filt_low, filt_high = create_filter_widgets(cols, key='ae')
         df = df[(df[filter_col]>=filt_low) & (df[filter_col]<=filt_high)]
@@ -822,6 +952,7 @@ if st.checkbox('Actual To Expected by Risk Score Group'):
         ae = ae.reset_index()
         ae['life_years_sum']=ae[hue].map(ae.groupby(hue)["life_years"].sum())
         ae['Frequency'] = ae['life_years']/ae['life_years_sum']
+        
         return ae
 
     ae = calculate_ae(df, hue)
@@ -832,7 +963,8 @@ if st.checkbox('Actual To Expected by Risk Score Group'):
         st.pyplot(fig)
 
         fig = plt.figure(figsize=figsize)
-        sns.barplot(data=ae, x='risk_group', y='cumulative_ae', hue=hue)
+        sns.lineplot(data=ae, x='risk_group', y='cumulative_ae', hue=hue)
+        plt.legend([],[], frameon=False)
         st.pyplot(fig)
     
         fig = plt.figure(figsize=(figsize[0], figsize[1]/2))
@@ -850,6 +982,7 @@ if st.checkbox('SHAP Importance'):
 
     def create_df_shap_imp(df):
         cols = [col for col in df.columns if "_shap" in col]
+        cols = ['age' if 'age' in col else col for col in cols]
         df_shap = pd.DataFrame()
         for col in cols:
             df_tmp = pd.DataFrame()
@@ -897,10 +1030,10 @@ if st.checkbox('SHAP Importance'):
     df_shap = df_shap.sort_values(by=['Importance'], ascending=False)
 
     def plot_shap_imp(df_shap, xlim_age_gender, order):
-        fig = plt.figure(figsize=(10,3))
-        ax = sns.barplot(data=df_shap, x='Feature', y='Importance', palette='Blues_r', order=["age","gender"])
-        ax.set_ylim(0,xlim_age_gender*1.05)
-        st.pyplot(fig)
+        #fig = plt.figure(figsize=(10,3))
+        #ax = sns.barplot(data=df_shap, x='Feature', y='Importance', palette='Blues_r', order=["age","gender"])
+        #ax.set_ylim(0,xlim_age_gender*1.05)
+        #st.pyplot(fig)
 
         if order:
             fig = plt.figure(figsize=(10,len(order)/2))
@@ -944,9 +1077,11 @@ if st.checkbox('SHAP Dependency'):
     h = (x_max - x_min) / 100
     def plot_dependence(df, col, col_2):
             fig = plt.figure(figsize=(10,6))
+            col_tmp = col
+            if 'age' in col_tmp: col_tmp='age'
             scr = sns.scatterplot(
                 data=df,
-                x=col, 
+                x=col_tmp, 
                 y=col+'_shap',
                 hue=col_2,
                 s=s
@@ -960,24 +1095,22 @@ if st.checkbox('SHAP Dependency'):
         
     plot_dependence(df, col, col_2)
 
-# ----
-st.subheader('Model and Population Compare')
+if st.checkbox('Compare Risk Scores - 3D Histogram'):
 
-model_dfs = glob.glob('model/model_df_*.p')
-model_names = [model_df.replace('model/model_df_','').replace('.p','') for model_df in model_dfs]
+    model_dfs = glob.glob('model/model_df_*.p')
+    model_names = [model_df.replace('model/model_df_','').replace('.p','') for model_df in model_dfs]
+    model_names = sorted(model_names)
 
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-with col1:
-    model_name_1 = st.selectbox('Model 1: ', tuple(model_names), index=0)
-    
-with col2:
-    model_name_2 = st.selectbox('Model 2: ', tuple(model_names), index=1)
+    with col1:
+        model_name_1 = st.selectbox('Model 1: ', tuple(model_names), index=0)
+        
+    with col2:
+        model_name_2 = st.selectbox('Model 2: ', tuple(model_names), index=1)
 
-model_df_1 = 'model/model_df_' + model_name_1 + '.p'
-model_df_2 = 'model/model_df_' + model_name_2 + '.p'
-
-if st.checkbox('Risk Score Comparison'):
+    model_df_1 = 'model/model_df_' + model_name_1 + '.p'
+    model_df_2 = 'model/model_df_' + model_name_2 + '.p'
 
     bins = st.slider('Bin size: ',1,20,10)
     col1, col2 = st.columns(2)
@@ -1017,7 +1150,7 @@ if st.checkbox('Risk Score Comparison'):
     rgba = [cmap((k-min_height)/max_height) for k in dz] 
 
     ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=rgba, zsort='average')
-    ax.view_init(30+tilt,-110+spin)
+    ax.view_init(30+tilt,-110+spin*-1)
     plt.title("3D Histogram of Model Risk Scores \n Bivariate Distribution")
     plt.xlabel(model_name_1)
     plt.ylabel(model_name_2)

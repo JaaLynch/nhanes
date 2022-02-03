@@ -1046,7 +1046,7 @@
          "column_name":"SMQ040",
          "alias":"qs_sm_cig_now",
          "fillna":0,
-         "encoding":"{9:None, '.':0, 7:None}",
+         "encoding":"{9:None, '.':0, 7:None, 3:0, 2:1}",
          "type":"float",
          "encoding_names":null
         },
