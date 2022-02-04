@@ -148,6 +148,18 @@ def create_sample_df(df, wt_col='wt_mec', k=1000):
     df = pd.merge(id_sample, df, on='id', how='left')
     return df
 
+@st.cache
+def get_model_names():
+    model_dfs = glob.glob('model/model_df_*.p')
+    model_names = [model_df.replace('model/model_df_','').replace('.p','') for model_df in model_dfs]
+    model_names = sorted(model_names)
+    return model_names
+
+
+
+## -----------------
+## -----------------
+## -----------------
 ## -----------------
 st.title('NHANES Modeling Dashboard')
 
@@ -1156,3 +1168,227 @@ if st.checkbox('Compare Risk Scores - 3D Histogram'):
     plt.ylabel(model_name_2)
     #plt.savefig("Your_title_goes_here")
     st.pyplot(fig)
+
+st.subheader('Calibrate Model Systems')
+
+# Population filters and simulation/sampling
+
+# Create Underwriting Rules (creates config file)
+
+# Model 1, Model 2, Model 1 Class, Model 2 Class, Combined Class
+# Goal is create a dataframe and output to csv a config file like the one above
+# that represents the full recursive mapping between models
+
+# Select from a grid of 6 models
+# Select from a grid of 6 model class numbers
+# 
+# Select from a generated grid of percentile bin boundaries for each class (variable number of classes)
+
+def create_custom_risk_groups(df, bins=[0, 0.25, 0.75, 1.0], cut_col='risk_score'):
+    labels = []
+    labels_numeric = []
+    i = 1
+    for bin, next_bin in zip(bins, bins[1:]):
+        bin = int(round(bin*100,0))
+        next_bin = int(round(next_bin*100,0))
+        bin = str(bin).zfill(2)
+        next_bin = str(next_bin).zfill(2)
+        labels.append(bin+'-'+next_bin)
+        labels_numeric.append(i)
+        i = i+1
+    df['risk_group_cstm'] = pd.cut(df[cut_col], bins, labels=labels, include_lowest=True).astype(str)
+    df['risk_group_cstm_n'] = pd.cut(df[cut_col], bins, labels=labels_numeric, include_lowest=True)
+    return df
+
+def calculate_ae_multi(df, cols=['risk_group','risk_group']):
+    ae = df.groupby(cols).agg(
+        life_years = ('exposure_months','sum'),
+        expected_deaths = ('expected_deaths','sum'), 
+        actual_deaths = ('death','sum')
+    )
+    ae['ae'] =round(ae['actual_deaths']/ae['expected_deaths']*100,1)
+    ae['life_years'] = ae['life_years']/12
+    ae = ae.dropna(subset=['life_years', 'expected_deaths','ae'])
+    ae = ae.reset_index()
+    ae['Frequency'] = round(ae['life_years']/ae['life_years'].sum()*100,1)
+    
+    return ae
+
+def plot_heatmaps(ae, figsize=(10,4)):
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(1,2)
+    
+    ax = fig.add_subplot(gs[0,0])
+    ax.set_title('AE 2015 VBT Unismoke')
+    tmp = ae.pivot(index='class_model_1', columns='class_model_2', values='ae')
+    ax = sns.heatmap(tmp, annot=True, fmt='.0f')
+
+    ax = fig.add_subplot(gs[0,1])
+    ax.set_title('Exposure Percent')
+    tmp = ae.pivot(index='class_model_1', columns='class_model_2', values='Frequency')
+    ax = sns.heatmap(tmp, annot=True, fmt='.0f')
+    st.pyplot(fig)
+
+def map_two_models(key='mtm', df_in=None):
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if df_in is not None:
+            model_1 = st.selectbox('Combined score from mapping: ', tuple(['class_combined']),key='5'+str(key))
+        else:
+            model_1 = st.selectbox('Model 1: ', tuple(model_names), index=model_names.index('bmi_waist_pulse_armd_legp'), key='1'+str(key))
+        score_cuts_1 = st.text_input('Score cuts', value='0.2, 0.8', key='2'+str(key)).split(",")
+        score_cuts_1 = [0] + [float(score.strip()) for score in score_cuts_1] + [1]
+    with col2:
+        if df_in is not None:
+            model_2_text = 'Additional model:'
+        else:
+            model_2_text = 'Model 2: '
+        model_2 = st.selectbox(model_2_text, tuple(model_names), index=model_names.index('labs'), key='3'+str(key))
+        score_cuts_2 = st.text_input('Score cuts', value='0.2, 0.8', key='4'+str(key)).split(",")
+        score_cuts_2 = [0] + [float(score.strip()) for score in score_cuts_2] + [1]
+
+    if df_in is not None:
+        df1 = df_in
+        df1 = create_custom_risk_groups(df1, bins=score_cuts_1, cut_col='class_combined')
+        col1 = df1.class_combined
+
+    else:
+        df1 = pd.read_pickle('model/model_df_' + model_1 + '.p')
+        df1 = create_custom_risk_groups(df1, bins=score_cuts_1)
+        col1 = df1.risk_group_cstm_n
+    
+    df2 = pd.read_pickle('model/model_df_' + model_2 + '.p')
+    df2 = create_custom_risk_groups(df2, bins=score_cuts_2)
+
+
+    df = pd.DataFrame(zip(col1, df2.risk_group_cstm_n), columns=['class_model_1','class_model_2'])
+    df = pd.concat([df, df1[['exposure_months', 'expected_deaths', 'death']]], axis=1)
+
+    ae = calculate_ae_multi(df, cols =['class_model_1','class_model_2'])
+
+    ae["model_1"] = model_1
+    ae["model_2"] = model_2
+    ae["rule"] = key
+
+    return ae, df
+
+def attach_class_mapping(ae, key='acm'):
+    cells = ae.shape[0]
+    value = [1] * cells
+    map_1 = st.text_input('Class mapping (top left to bottom right)', value=value, key=str(key)).split(",")
+    map_1 = [int(str(x).replace('[','').replace(']','')) for x in map_1]
+
+    tmp = pd.DataFrame(map_1, columns=['class_combined'])
+    ae = pd.concat([ae, tmp], axis=1)
+    ae[['class_model_1', 'class_model_2', 'class_combined']] = ae[['class_model_1', 'class_model_2', 'class_combined']].astype(int)
+    return ae
+
+if st.checkbox('Create scoring system'):
+    model_names = get_model_names()
+
+    key=1
+    ae, df = map_two_models(key=key) 
+    plot_heatmaps(ae)
+    ae = attach_class_mapping(ae, key=key)
+    oncols = ['class_model_1', 'class_model_2']
+    cols = ['class_combined']
+    df = pd.merge(df, ae[oncols+cols], on=oncols, how='left')
+    ae_cum = ae
+
+    key=2
+    ae, df = map_two_models(key=key, df_in = df) 
+    plot_heatmaps(ae)
+    ae = attach_class_mapping(ae, key=key)
+    oncols = ['class_model_1', 'class_model_2']
+    cols = ['class_combined']
+    df = pd.merge(df, ae[oncols+cols], on=oncols, how='left')
+    ae_cum = pd.concat([ae_cum, ae], axis=0)
+
+    key=3
+    ae, df = map_two_models(key=key, df_in = df) 
+    plot_heatmaps(ae)
+    ae = attach_class_mapping(ae, key=key)
+    oncols = ['class_model_1', 'class_model_2']
+    cols = ['class_combined']
+    df = pd.merge(df, ae[oncols+cols], on=oncols, how='left')
+    ae_cum = pd.concat([ae_cum, ae], axis=0)
+
+    key=4
+    ae, df = map_two_models(key=key, df_in = df) 
+    plot_heatmaps(ae)
+    ae = attach_class_mapping(ae, key=key)
+    oncols = ['class_model_1', 'class_model_2']
+    cols = ['class_combined']
+    df = pd.merge(df, ae[oncols+cols], on=oncols, how='left')
+    ae_cum = pd.concat([ae_cum, ae], axis=0)
+
+    key=5
+    ae, _ = map_two_models(key=key, df_in = df) 
+    plot_heatmaps(ae)
+    ae = attach_class_mapping(ae, key=key)
+    ae_cum = pd.concat([ae_cum, ae], axis=0)
+
+    system_name = st.text_input('Enter a name: ', value='')
+    save = st.button('Save')
+    if save:
+        ae_cum.to_pickle('model/system_'+system_name+'.p')
+        ae_cum.to_csv('model/system_'+system_name+'.csv', index=False)
+
+if st.checkbox('Scoring system results'):
+
+    system_files = glob.glob('model/system_*.p')
+    system_names = [system_file.replace('model/system_','').replace('.p','') for system_file in system_files]
+    system_names = sorted(system_names)
+
+    system_name = st.selectbox('Select scoring system', tuple(system_names))
+
+    file_name = 'model/system_' + system_name + '.p'
+
+    df = pd.read_pickle(file_name)
+    df = df.rename(columns={'actual_deaths':'death',  'life_years':'exposure_months'})
+    df['exposure_months'] = df['exposure_months'] * 12
+
+    ae = calculate_ae_multi(df, cols=['rule','class_combined'])
+    ae['actual_deaths_cum'] = ae.groupby(['rule'])['actual_deaths'].cumsum()
+    ae['expected_deaths_cum'] = ae.groupby(['rule'])['expected_deaths'].cumsum()
+    ae['cumulative_ae'] = ae['actual_deaths_cum']/ae['expected_deaths_cum']*100
+    ae = ae.reset_index()
+    ae['life_years_sum']=ae['rule'].map(ae.groupby('rule')["life_years"].sum())
+    ae['Frequency'] = ae['life_years']/ae['life_years_sum']
+
+    genre = st.radio(
+     "What would you like to plot",
+     ('Progressive results', 'Final results'))
+
+    if genre == 'Progressive results':
+        x = 'rule'
+        hue = 'class_combined'
+    else:
+        ae = ae[ae.rule==ae.rule.max()]
+        x = 'class_combined'
+        hue = None
+
+    figsize = (10, 4)
+    fig = plt.figure(figsize=figsize)
+    ax = sns.barplot(data=ae, x=x, y='ae', hue=hue, palette='Blues')
+    st.pyplot(fig)
+    
+    figsize = (10, 2)
+    fig = plt.figure(figsize=figsize)
+    sns.barplot(data=ae, x=x, y='cumulative_ae', hue=hue, palette='Blues')
+    plt.legend([],[], frameon=False)
+    st.pyplot(fig)
+
+    figsize = (10, 2)
+    fig = plt.figure(figsize=figsize)
+    sns.barplot(data=ae, x=x, y='Frequency', hue=hue, palette='Blues')
+    plt.legend([],[], frameon=False)
+    st.pyplot(fig)
+
+    ae
+
+
+
+
+
